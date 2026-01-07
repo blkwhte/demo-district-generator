@@ -13,40 +13,34 @@ fake = Faker('en_US')
 console = Console()
 
 # ==========================================
-# 1. DEFAULT CONFIGURATION (EDIT ME!)
+# 1. DEFAULT CONFIGURATION
 # ==========================================
-# Adjust these values to change your "Quick Start" defaults
 DEFAULTS = {
     "ID_MODE": "alphanumeric",
     "NUM_DISTRICTS": 1,
     "SCHOOLS_PER_DISTRICT": 5,
     "TEACHERS_PER_SCHOOL": 10,
-    "SECTIONS_PER_SCHOOL": 4,
-    "STUDENTS_PER_SECTION": 20,
+    "SECTIONS_PER_SCHOOL": 10,
+    "STUDENTS_PER_SECTION": 15,
     
-    # Demographics (Probabilities 0.0 - 1.0)
-    "PROB_FRL": 0.45,
-    "PROB_IEP": 0.12,
-    "PROB_ELL": 0.10,
-    "PROB_504": 0.05,
-    "PROB_GIFTED": 0.08,
-    "PROB_DISABILITY": 0.11,
+    # Demographics
+    "PROB_FRL": 0.45, "PROB_IEP": 0.12, "PROB_ELL": 0.10,
+    "PROB_504": 0.05, "PROB_GIFTED": 0.08, "PROB_DISABILITY": 0.11,
     
     # Toggles
     "DO_EXTENSIONS": True,
     "DO_RESOURCES": True,
     "DO_ATTENDANCE": True,
     
-    # Attendance Details
-    "ATT_START_DATE": "2026-01-01",
+    # Attendance / Term Context
+    "ATT_START_DATE": "2025-04-01",
     "ATT_DAYS": 5,
-    "ATT_MODE": "Section" # "Daily" or "Section"
+    "ATT_MODE": "Section" 
 }
 
 # ==========================================
 # 2. CONSTANTS & MAPPINGS
 # ==========================================
-
 GENERIC_DISTRICT_NAMES = [
     "MapleValley", "OakRiver", "SummitHeights", "PineCreek", 
     "LibertyUnion", "Heritage", "PioneerValley", "GrandView", 
@@ -63,7 +57,6 @@ STATE_MAPPINGS = {
 }
 STATE_KEYS = list(STATE_MAPPINGS.keys())
 
-# Residential Zip Prefixes
 REAL_LOCATIONS = {
     "CA": [("San Francisco", "941"), ("Los Angeles", "900"), ("San Diego", "921"), ("Sacramento", "958"), ("Fresno", "937")],
     "TX": [("Austin", "787"), ("Houston", "770"), ("Dallas", "752"), ("San Antonio", "782"), ("Fort Worth", "761")],
@@ -90,13 +83,11 @@ DISABILITY_CODES = list(DISABILITY_MAP.keys())
 # ==========================================
 # 3. USER INPUT LOGIC
 # ==========================================
-console.rule("[bold green]Unified District Generator (v3.1)[/bold green]")
+console.rule("[bold green]Unified District Generator (v3.2 - With Terms)[/bold green]")
 
-# --- THE "QUICK START" QUESTION ---
-USE_DEFAULTS = Confirm.ask(f"Apply default settings? ({DEFAULTS['SCHOOLS_PER_DISTRICT']} schools, {DEFAULTS['ATT_DAYS']} days attendance, etc)", default=False)
+USE_DEFAULTS = Confirm.ask(f"Apply default settings?", default=False)
 
 if USE_DEFAULTS:
-    # Load from DEFAULTS dict
     ID_MODE = DEFAULTS["ID_MODE"]
     NUM_DISTRICTS = DEFAULTS["NUM_DISTRICTS"]
     SCHOOLS_PER_DISTRICT = DEFAULTS["SCHOOLS_PER_DISTRICT"]
@@ -115,15 +106,9 @@ if USE_DEFAULTS:
     DO_RESOURCES = DEFAULTS["DO_RESOURCES"]
     DO_ATTENDANCE = DEFAULTS["DO_ATTENDANCE"]
     
-    ATT_CONFIG = {
-        'start_date': DEFAULTS["ATT_START_DATE"],
-        'days': DEFAULTS["ATT_DAYS"],
-        'mode': DEFAULTS["ATT_MODE"]
-    }
+    ATT_CONFIG = {'start_date': DEFAULTS["ATT_START_DATE"], 'days': DEFAULTS["ATT_DAYS"], 'mode': DEFAULTS["ATT_MODE"]}
     console.print("[yellow]Defaults loaded![/yellow]")
-
 else:
-    # Manual Configuration
     ID_MODE = Prompt.ask("Select ID Mode", choices=["sequential", "alphanumeric"], default=DEFAULTS["ID_MODE"])
     NUM_DISTRICTS = IntPrompt.ask("Districts", default=DEFAULTS["NUM_DISTRICTS"])
     SCHOOLS_PER_DISTRICT = IntPrompt.ask("Schools per District", default=DEFAULTS["SCHOOLS_PER_DISTRICT"])
@@ -145,18 +130,9 @@ else:
     DO_ATTENDANCE = Confirm.ask("Generate Attendance.csv?", default=DEFAULTS["DO_ATTENDANCE"])
 
     ATT_CONFIG = {}
-    if DO_ATTENDANCE:
-        ATT_CONFIG['start_date'] = Prompt.ask("   Start Date", default=DEFAULTS["ATT_START_DATE"])
-        ATT_CONFIG['days'] = IntPrompt.ask("   Days to Generate", default=DEFAULTS["ATT_DAYS"])
-        ATT_CONFIG['mode'] = Prompt.ask("   Mode", choices=["Daily", "Section"], default=DEFAULTS["ATT_MODE"])
-
-# Summary
-summary_table = Table(title="Configuration Summary")
-summary_table.add_column("Setting", style="cyan")
-summary_table.add_column("Value", style="magenta")
-summary_table.add_row("Structure", f"{NUM_DISTRICTS} Dists / {SCHOOLS_PER_DISTRICT} Schools")
-summary_table.add_row("Extras", f"Ext:{DO_EXTENSIONS} | Res:{DO_RESOURCES} | Att:{DO_ATTENDANCE}")
-console.print(summary_table)
+    ATT_CONFIG['start_date'] = Prompt.ask("   Start Date", default=DEFAULTS["ATT_START_DATE"])
+    ATT_CONFIG['days'] = IntPrompt.ask("   Days to Generate", default=DEFAULTS["ATT_DAYS"]) if DO_ATTENDANCE else 0
+    ATT_CONFIG['mode'] = Prompt.ask("   Mode", choices=["Daily", "Section"], default=DEFAULTS["ATT_MODE"]) if DO_ATTENDANCE else "Section"
 
 if not Confirm.ask("Ready to generate?", default=True): exit()
 
@@ -181,10 +157,27 @@ def generate_date_range(start_str, days):
         current += datetime.timedelta(days=1)
     return dates
 
+def get_term_data(anchor_date_str):
+    """Calculates a realistic School Year term based on the attendance start date."""
+    dt = datetime.datetime.strptime(anchor_date_str, "%Y-%m-%d")
+
+    # Jan-July maps to the previous Fall. August starts the new year.
+    start_year = dt.year - 1 if dt.month < 8 else dt.year
+    end_year = start_year + 1
+    
+    return {
+        "Term_name": f"{start_year}-{end_year}",
+        "Term_start": f"{start_year}-08-15",
+        "Term_end": f"{end_year}-06-15"
+    }
+
 # ==========================================
 # 5. MAIN GENERATION LOOP
 # ==========================================
-base_output_dir = 'clever_district_data'
+base_output_dir = 'district_data'
+
+# Pre-calculate term for the whole district based on config
+TERM_INFO = get_term_data(ATT_CONFIG['start_date'])
 
 with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), BarColumn(), console=console) as progress:
     main_task = progress.add_task("[green]Initializing...", total=NUM_DISTRICTS)
@@ -192,7 +185,7 @@ with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.descripti
     for i in range(NUM_DISTRICTS):
         # --- PHASE 1: CORE STRUCTURE ---
         dist_name = GENERIC_DISTRICT_NAMES[i % len(GENERIC_DISTRICT_NAMES)]
-        progress.update(main_task, description=f"[green]Generating {dist_name} Structure...[/green]")
+        progress.update(main_task, description=f"[green]Generating {dist_name}...[/green]")
         
         state_key = STATE_KEYS[i % len(STATE_KEYS)]
         state_name, state_abbr = STATE_MAPPINGS[state_key]
@@ -264,9 +257,18 @@ with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.descripti
                 s_grade = random.choice(grade_list)
                 s_subj = random.choice(['Math', 'Science', 'ELA', 'History'])
 
+                # SECTION SCHEMA UPDATE: ADDED TERM FIELDS
                 sections_data.append({
-                    "School_id": school_id, "Section_id": sec_id, "Teacher_id": p_teach, "Teacher_2_id": s_teach,
-                    "Name": f"{s_grade} - {s_subj} ({sec_idx+1})", "Grade": s_grade, "Subject": s_subj
+                    "School_id": school_id, 
+                    "Section_id": sec_id, 
+                    "Teacher_id": p_teach, 
+                    "Teacher_2_id": s_teach,
+                    "Name": f"{s_grade} - {s_subj} ({sec_idx+1})", 
+                    "Grade": s_grade, 
+                    "Subject": s_subj,
+                    "Term_name": TERM_INFO["Term_name"],
+                    "Term_start": TERM_INFO["Term_start"],
+                    "Term_end": TERM_INFO["Term_end"]
                 })
 
                 # STUDENTS
@@ -279,7 +281,13 @@ with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.descripti
                         stu_id = get_sequential_id(base_id_seq, 200000 + (sec_idx * 100) + stu_idx)
                         stu_num, state_id = stu_id, stu_id
 
-                    f, l = fake.first_name(), fake.last_name()
+                    gender_code = random.choice(['M', 'F'])
+                    if gender_code == 'M':
+                            f = fake.first_name_male()
+                    else:
+                            f = fake.first_name_female()
+
+                    l = fake.last_name()
                     
                     has_disability = "Y" if random.random() < PROB_DISABILITY else "N"
                     dis_code, dis_type = ("", "")
@@ -289,7 +297,8 @@ with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.descripti
 
                     student_obj = {
                         "School_id": school_id, "Student_id": stu_id, "Student_number": stu_num, "State_id": state_id,
-                        "Last_name": l, "First_name": f, "Grade": s_grade, "Gender": random.choice(['M', 'F']),
+                        "Last_name": l, "First_name": f, "Grade": s_grade, 
+                        "Gender": gender_code,
                         "DOB": generate_dob(s_grade), "Email_address": f"{f[0]}{l}{random.randint(10,99)}@{email_domain}".lower(),
                         "Race": random.choices(CLEVER_RACE_VALUES, weights=RACE_WEIGHTS)[0],
                         "Home_language": random.choices(LANG_KEYS, weights=LANG_WEIGHTS)[0],
@@ -301,7 +310,6 @@ with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.descripti
                         "Disability_status": has_disability, "Disability_type": dis_type, "Disability_code": dis_code
                     }
                     
-                    # Extensions
                     if DO_EXTENSIONS:
                         student_obj['ext.locker_number'] = random.randint(100, 9999)
                         student_obj['ext.bus_route'] = random.choice(['Route A', 'Route B', 'Walk'])
@@ -319,7 +327,7 @@ with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.descripti
         attendance_data = []
 
         if DO_RESOURCES:
-            progress.update(main_task, description=f"[cyan]Generating Resources for {dist_name}...[/cyan]")
+            progress.update(main_task, description=f"[cyan]Resources for {dist_name}...[/cyan]")
             library_pool = [
                 ("District Math: Algebra I", "student,teacher"), ("District Math: Geometry", "student,teacher"),
                 ("Virtual Lab: Biology", "student,teacher"), ("District Digital Library", "student,teacher"),
@@ -331,10 +339,9 @@ with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.descripti
                 resources_data.append({"resource_id": res_id, "title": title, "roles": roles})
 
         if DO_ATTENDANCE:
-            progress.update(main_task, description=f"[cyan]Generating Attendance for {dist_name}...[/cyan]")
+            progress.update(main_task, description=f"[cyan]Attendance for {dist_name}...[/cyan]")
             valid_dates = generate_date_range(ATT_CONFIG['start_date'], ATT_CONFIG['days'])
             
-            # Index Enrollments
             stu_to_sec = {}
             if ATT_CONFIG['mode'] == "Section":
                 for row in enrollments_data:
@@ -356,7 +363,6 @@ with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.descripti
                             "attendance_status": status, "excuse_code": excuse
                         })
                     else:
-                        # Section Mode
                         for sec_id in stu_to_sec.get(sid, []):
                             status = random.choices(["present", "absent", "tardy"], weights=[0.92, 0.04, 0.04])[0]
                             excuse = f"EXC-{random.randint(100,999)}" if status != "present" else ""
@@ -367,7 +373,7 @@ with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.descripti
                             })
 
         # --- PHASE 3: SAVING ---
-        progress.update(main_task, description=f"[yellow]Saving {dist_name} Files...[/yellow]")
+        progress.update(main_task, description=f"[yellow]Saving {dist_name}...[/yellow]")
         out_dir = os.path.join(base_output_dir, f"{dist_name}_Data")
         os.makedirs(out_dir, exist_ok=True)
         
