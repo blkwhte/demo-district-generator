@@ -28,9 +28,9 @@ DEFAULTS = {
     "PROB_504": 0.05, "PROB_GIFTED": 0.08, "PROB_DISABILITY": 0.11,
     
     # Toggles
-    "DO_EXTENSIONS": True,
-    "DO_RESOURCES": True,
-    "DO_ATTENDANCE": True,
+    "DO_EXTENSIONS": False,
+    "DO_RESOURCES": False,
+    "DO_ATTENDANCE": False,
     
     # Attendance / Term Context
     "ATT_START_DATE": "2025-04-01",
