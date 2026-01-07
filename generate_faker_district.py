@@ -40,17 +40,79 @@ STATE_KEYS = list(STATE_MAPPINGS.keys())
 
 # --- NEW: VALID CITY/ZIP MAPPING ---
 # Format: "StateAbbr": [("City", "ZipPrefix")]
+# --- IMPROVED LOCATION MAPPING (Residential Prefixes) ---
+# Format: "StateAbbr": [("City", "ZipPrefix")]
 REAL_LOCATIONS = {
-    "CA": [("San Francisco", "941"), ("Los Angeles", "900"), ("San Diego", "921"), ("Sacramento", "958"), ("Fresno", "937")],
-    "TX": [("Austin", "733"), ("Houston", "770"), ("Dallas", "752"), ("San Antonio", "782"), ("Fort Worth", "761")],
-    "NY": [("New York", "100"), ("Buffalo", "142"), ("Albany", "122"), ("Rochester", "146"), ("Syracuse", "132")],
-    "FL": [("Miami", "331"), ("Orlando", "328"), ("Tampa", "336"), ("Jacksonville", "320"), ("Tallahassee", "323")],
-    "WA": [("Seattle", "981"), ("Spokane", "992"), ("Tacoma", "984"), ("Vancouver", "986"), ("Bellevue", "980")],
-    "IL": [("Chicago", "606"), ("Springfield", "627"), ("Peoria", "616"), ("Naperville", "605"), ("Rockford", "611")],
-    "CO": [("Denver", "802"), ("Colorado Springs", "809"), ("Boulder", "803"), ("Aurora", "800"), ("Fort Collins", "805")],
-    "AZ": [("Phoenix", "850"), ("Tucson", "857"), ("Mesa", "852"), ("Scottsdale", "852"), ("Chandler", "852")],
-    "GA": [("Atlanta", "303"), ("Savannah", "314"), ("Augusta", "309"), ("Athens", "306"), ("Macon", "312")],
-    "MA": [("Boston", "021"), ("Worcester", "016"), ("Springfield", "011"), ("Cambridge", "021"), ("Lowell", "018")]
+    "CA": [
+        ("San Francisco", "941"), # 94110 = Mission, 94103 = SoMa
+        ("Los Angeles", "900"),   # 90028 = Hollywood
+        ("San Diego", "921"),     # 92101 = Downtown
+        ("Sacramento", "958"),    # 95814 = Capitol
+        ("Fresno", "937")
+    ],
+    "TX": [
+        ("Austin", "787"),        # 78701 = Downtown (Replaced 733)
+        ("Houston", "770"),       # 77002 = Downtown
+        ("Dallas", "752"),        # 75201 = Downtown
+        ("San Antonio", "782"),   # 78205 = Downtown
+        ("Fort Worth", "761")
+    ],
+    "NY": [
+        ("New York", "100"),      # 10001 = Manhattan
+        ("Brooklyn", "112"),      # 11201 = Brooklyn Heights
+        ("Bronx", "104"),         # 10451 = The Bronx
+        ("Buffalo", "142"),       
+        ("Albany", "122")
+    ],
+    "FL": [
+        ("Miami", "331"),         # 33139 = South Beach
+        ("Orlando", "328"),       # 32801 = Downtown
+        ("Tampa", "336"),         
+        ("Jacksonville", "322"),  # 32202 = Downtown
+        ("Tallahassee", "323")
+    ],
+    "WA": [
+        ("Seattle", "981"),       # 98101 = Downtown
+        ("Spokane", "992"),       
+        ("Tacoma", "984"),        
+        ("Vancouver", "986"),     
+        ("Bellevue", "980")
+    ],
+    "IL": [
+        ("Chicago", "606"),       # 60614 = Lincoln Park
+        ("Springfield", "627"),   
+        ("Peoria", "616"),        
+        ("Naperville", "605"),    
+        ("Rockford", "611")
+    ],
+    "CO": [
+        ("Denver", "802"),        # 80202 = LoDo
+        ("Colorado Springs", "809"), 
+        ("Boulder", "803"),       
+        ("Aurora", "800"),        
+        ("Fort Collins", "805")
+    ],
+    "AZ": [
+        ("Phoenix", "850"),       
+        ("Tucson", "857"),        
+        ("Mesa", "852"),          
+        ("Scottsdale", "852"),    
+        ("Chandler", "852")
+    ],
+    "GA": [
+        ("Atlanta", "303"),       # 30303 = Downtown
+        ("Savannah", "314"),      
+        ("Augusta", "309"),       
+        ("Athens", "306"),        
+        ("Macon", "312")
+    ],
+    "MA": [
+        ("Boston", "021"),        # 02108 = Beacon Hill
+        ("Worcester", "016"),     
+        ("Springfield", "011"),   
+        ("Cambridge", "021"),     # 02138 = Harvard Sq
+        ("Lowell", "018")
+    ]
 }
 
 # --- CLEVER COMPLIANT VALUES ---
