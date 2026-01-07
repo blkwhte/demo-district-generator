@@ -61,10 +61,7 @@ When you run the script, you will be asked:
 * Whether to include Attendance or Resource files.
 
 
-### 5. Output Structure
-
-
-## 📂 Output
+### Output Structure
 
 Data is generated in the `district_data/` directory. Each district gets its own folder:
 
@@ -81,10 +78,7 @@ district_data/
     └── resources.csv   (Optional)
 ```
 
-### 6. Configuration
-
-
-## ⚙️ Configuration
+### Configuration
 
 You can permanently adjust the "Quick Start" baseline by editing the `DEFAULTS` dictionary at the top of `generate_unified_district.py`:
 
@@ -105,10 +99,7 @@ DEFAULTS = {
 }
 ```
 
-### 7. Data Logic & Notes
-
-
-## 🧠 Data Logic Notes
+### Data Logic & Notes
 
 * **Term Dates:** The script calculates the term based on the `ATT_START_DATE`.
     * *Jan - July:* Maps to the **previous** Fall start (e.g., July 2025 = 2024-2025 School Year).
