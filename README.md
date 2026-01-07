@@ -43,7 +43,7 @@ Run the main script:
 ```bash
 python generate_unified_district.py
 ```
-```markdown 
+
 ## The "Quick Start" Workflow
 
 When you run the script, you will be asked:
@@ -63,7 +63,7 @@ When you run the script, you will be asked:
 
 ### 5. Output Structure
 
-```markdown
+
 ## 📂 Output
 
 Data is generated in the `district_data/` directory. Each district gets its own folder:
@@ -83,7 +83,7 @@ district_data/
 
 ### 6. Configuration
 
-```markdown
+
 ## ⚙️ Configuration
 
 You can permanently adjust the "Quick Start" baseline by editing the `DEFAULTS` dictionary at the top of `generate_unified_district.py`:
@@ -107,7 +107,7 @@ DEFAULTS = {
 
 ### 7. Data Logic & Notes
 
-```markdown
+
 ## 🧠 Data Logic Notes
 
 * **Term Dates:** The script calculates the term based on the `ATT_START_DATE`.
