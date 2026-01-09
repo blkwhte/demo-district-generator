@@ -56,6 +56,12 @@ When you run the script, you will be asked:
 
 * Number of Districts/Schools/Students.
 
+* Academic start year for term data
+
+* Number of terms per year
+
+* If a summer session should be included
+
 * Probability of demographics (IEP, FRL, etc.).
 
 * Whether to include Attendance or Resource files.
@@ -87,7 +93,7 @@ DEFAULTS = {
     "NUM_DISTRICTS": 1,
     "SCHOOLS_PER_DISTRICT": 5,
     "TEACHERS_PER_SCHOOL": 10,
-    "SECTIONS_PER_SCHOOL": 15,    # Increased slightly to show off term splitting
+    "SECTIONS_PER_SCHOOL": 15,
     "STUDENTS_PER_SECTION": 20,
     
     # Term Configuration
@@ -119,7 +125,17 @@ DEFAULTS = {
 
 * **Smart Dates**: The script automatically generates realistic date ranges (e.g., Semesters align with Winter Break).
 
-* **Load Balancing**: Sections are distributed evenly across terms for each teacher. If a teacher has multiple sections, they will be split between Fall, Spring, and (optionally) Summer to create a realistic schedule.
+* **Load Balancing**: Sections are distributed evenly across terms for each teacher. If a teacher has multiple sections, they will be split between Fall, Spring, and (optionally) Summer to create a realistic schedule. The same logic will apply depending on how many terms you specify in the inital input config when exceuting. 
+
+    * The default ratio is set for semesters: 2 sections for each term + one summer section for each teacher.
+    
+    * General rule of thumb: If adding summer terms, add additional sections per school at a ratio of 1:1 for sections:teachers per school.    
+
+    * **Recommendation**: Set SECTIONS_PER_SCHOOL to Teachers * Number of desired terms. 
+    
+    * If you want Summer data, you need to budget "extra" sections in your configuration to push the rotation far enough to hit that Summer slot.
+    
+    * **Ex**: If using Quarters (4 terms) and 15 teachers per school, set this to at least 60 (4 per teacher, 1 per term).
 
 #### Attendance Modes:
 

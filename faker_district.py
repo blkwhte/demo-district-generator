@@ -18,8 +18,16 @@ DEFAULTS = {
     "ID_MODE": "alphanumeric",
     "NUM_DISTRICTS": 1,
     "SCHOOLS_PER_DISTRICT": 5,
-    "TEACHERS_PER_SCHOOL": 10,
-    "SECTIONS_PER_SCHOOL": 15,    # Increased slightly to show off term splitting
+    "TEACHERS_PER_SCHOOL": 15,
+    
+    # Recommendation: Set SECTIONS_PER_SCHOOL to Teachers * Number of desired terms.
+    # If you want Summer data, you need to budget "extra" sections in your configuration to push the rotation far enough to hit that Summer slot.
+    # Ex: If using Quarters (4 terms) and 15 teachers per school, set this to at least 60 (4 per teacher, 1 per term).
+    
+    # The default ratio is set for semesters: 2 sections for each term + one summer section for each teacher.
+    
+    # General rule of thumb: If adding summer terms, add additional sections per school at a ratio of 1:1 for sections:teachers per school.
+    "SECTIONS_PER_SCHOOL": 75,
     "STUDENTS_PER_SECTION": 20,
     
     # Term Configuration
