@@ -41,7 +41,7 @@ This tool is designed for developers and integration engineers who need robust, 
 Run the main script:
 
 ```bash
-python generate_unified_district.py
+python faker_district.py
 ```
 
 ## The "Quick Start" Workflow
@@ -80,7 +80,7 @@ district_data/
 
 ### Configuration
 
-You can permanently adjust the "Quick Start" baseline by editing the `DEFAULTS` dictionary at the top of `generate_unified_district.py`:
+You can permanently adjust the "Quick Start" baseline by editing the `DEFAULTS` dictionary at the top of `faker_district.py`:
 
 ```python
 DEFAULTS = {
