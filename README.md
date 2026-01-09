@@ -81,13 +81,17 @@ district_data/
 ### Configuration
 
 You can permanently adjust the "Quick Start" baseline by editing the `DEFAULTS` dictionary at the top of `faker_district.py`:
-
 ```python
 DEFAULTS = {
     "NUM_DISTRICTS": 1,
     "SCHOOLS_PER_DISTRICT": 5,
     "TEACHERS_PER_SCHOOL": 10,
     
+    # Term Logic Configuration
+    "SCHOOL_START_YEAR": "2025", # The academic start year (e.g., 2025-2026)
+    "NUM_TERMS": 2,              # 2=Semesters, 3=Trimesters, 4=Quarters
+    "INCLUDE_SUMMER": True,      # Auto-generate a future summer term?
+
     # Toggle extra datasets
     "DO_ATTENDANCE": False, 
     "DO_RESOURCES": False,
@@ -101,10 +105,19 @@ DEFAULTS = {
 
 ### Data Logic & Notes
 
-* **Term Dates:** The script calculates the term based on the `ATT_START_DATE`.
-    * *Jan - July:* Maps to the **previous** Fall start (e.g., July 2025 = 2024-2025 School Year).
-    * *Aug - Dec:* Maps to the **current** Fall start (e.g., Aug 2025 = 2025-2026 School Year).
-* **Attendance Modes:**
-    * **Daily:** One record per student per day.
-    * **Section:** One record per student *per section* per day (High volume).
-* **Privacy:** All Personally Identifiable Information (PII) is synthetically generated using `Faker`. No real student data is ever used.
+#### Dynamic Term Logic:
+
+* **Configuration**: You define the structure (Semesters/Trimesters/Quarters) and the SCHOOL_START_YEAR (e.g., 2025).
+
+* **Smart Dates**: The script automatically generates realistic date ranges (e.g., Semesters align with Winter Break).
+
+* **Load Balancing**: Sections are distributed evenly across terms for each teacher. If a teacher has multiple sections, they will be split between Fall, Spring, and (optionally) Summer to create a realistic schedule.
+
+#### Attendance Modes:
+
+* **Daily**: One record per student per day.
+
+* **Section**: One record per student per section per day (High volume).
+
+
+**Privacy**: All Personally Identifiable Information (PII) is synthetically generated using Faker. No real student data is ever used.
