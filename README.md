@@ -63,7 +63,7 @@ When you run the script, you will be asked:
 
 ### Output Structure
 
-Data is generated in the `district_data/` directory. Each district gets its own folder:
+Data is generated in the `district_data_output/` directory. Each district gets its own folder:
 
 ```text
 district_data/
