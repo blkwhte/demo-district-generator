@@ -7,7 +7,6 @@ from faker import Faker
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn
 from rich.prompt import IntPrompt, Confirm, Prompt, FloatPrompt
-from rich.table import Table
 
 fake = Faker('en_US')
 console = Console()
@@ -20,8 +19,13 @@ DEFAULTS = {
     "NUM_DISTRICTS": 1,
     "SCHOOLS_PER_DISTRICT": 5,
     "TEACHERS_PER_SCHOOL": 10,
-    "SECTIONS_PER_SCHOOL": 10,
-    "STUDENTS_PER_SECTION": 15,
+    "SECTIONS_PER_SCHOOL": 15,    # Increased slightly to show off term splitting
+    "STUDENTS_PER_SECTION": 20,
+    
+    # Term Configuration
+    "SCHOOL_START_YEAR": "2025",
+    "NUM_TERMS": 2,               # 2=Semester, 3=Trimester, 4=Quarter
+    "INCLUDE_SUMMER": True,
     
     # Demographics
     "PROB_FRL": 0.45, "PROB_IEP": 0.12, "PROB_ELL": 0.10,
@@ -32,8 +36,8 @@ DEFAULTS = {
     "DO_RESOURCES": False,
     "DO_ATTENDANCE": False,
     
-    # Attendance / Term Context
-    "ATT_START_DATE": "2025-04-01",
+    # Attendance Context (Still needed if attendance is on)
+    "ATT_START_DATE": "2025-09-01", 
     "ATT_DAYS": 5,
     "ATT_MODE": "Section" 
 }
@@ -83,7 +87,7 @@ DISABILITY_CODES = list(DISABILITY_MAP.keys())
 # ==========================================
 # 3. USER INPUT LOGIC
 # ==========================================
-console.rule("[bold green]Unified District Generator (v3.2 - With Terms)[/bold green]")
+console.rule("[bold green]Unified District Generator (v4.0 - Dynamic Terms)[/bold green]")
 
 USE_DEFAULTS = Confirm.ask(f"Apply default settings?", default=False)
 
@@ -94,6 +98,11 @@ if USE_DEFAULTS:
     TEACHERS_PER_SCHOOL = DEFAULTS["TEACHERS_PER_SCHOOL"]
     SECTIONS_PER_SCHOOL = DEFAULTS["SECTIONS_PER_SCHOOL"]
     STUDENTS_PER_SECTION = DEFAULTS["STUDENTS_PER_SECTION"]
+    
+    # Term Defaults
+    SCHOOL_START_YEAR = DEFAULTS["SCHOOL_START_YEAR"]
+    NUM_TERMS = DEFAULTS["NUM_TERMS"]
+    INCLUDE_SUMMER = DEFAULTS["INCLUDE_SUMMER"]
     
     PROB_FRL = DEFAULTS["PROB_FRL"]
     PROB_IEP = DEFAULTS["PROB_IEP"]
@@ -116,6 +125,11 @@ else:
     SECTIONS_PER_SCHOOL = IntPrompt.ask("Sections per School", default=DEFAULTS["SECTIONS_PER_SCHOOL"])
     STUDENTS_PER_SECTION = IntPrompt.ask("Students per Section", default=DEFAULTS["STUDENTS_PER_SECTION"])
 
+    console.print("\n[bold cyan]-- Term Configuration --[/bold cyan]")
+    SCHOOL_START_YEAR = Prompt.ask("School Start Year (YYYY)", default=DEFAULTS["SCHOOL_START_YEAR"])
+    NUM_TERMS = IntPrompt.ask("Terms per Year (2=Sem, 3=Tri, 4=Qtr)", choices=["2", "3", "4"], default=DEFAULTS["NUM_TERMS"])
+    INCLUDE_SUMMER = Confirm.ask("Include Summer Session?", default=DEFAULTS["INCLUDE_SUMMER"])
+
     console.print("\n[bold yellow]-- Demographics --[/bold yellow]")
     PROB_FRL = FloatPrompt.ask("Prob. FRL", default=DEFAULTS["PROB_FRL"])
     PROB_IEP = FloatPrompt.ask("Prob. IEP", default=DEFAULTS["PROB_IEP"])
@@ -130,9 +144,12 @@ else:
     DO_ATTENDANCE = Confirm.ask("Generate Attendance.csv?", default=DEFAULTS["DO_ATTENDANCE"])
 
     ATT_CONFIG = {}
-    ATT_CONFIG['start_date'] = Prompt.ask("   Start Date", default=DEFAULTS["ATT_START_DATE"])
-    ATT_CONFIG['days'] = IntPrompt.ask("   Days to Generate", default=DEFAULTS["ATT_DAYS"]) if DO_ATTENDANCE else 0
-    ATT_CONFIG['mode'] = Prompt.ask("   Mode", choices=["Daily", "Section"], default=DEFAULTS["ATT_MODE"]) if DO_ATTENDANCE else "Section"
+    if DO_ATTENDANCE:
+        ATT_CONFIG['start_date'] = Prompt.ask("   Attendance Start Date", default=DEFAULTS["ATT_START_DATE"])
+        ATT_CONFIG['days'] = IntPrompt.ask("   Days to Generate", default=DEFAULTS["ATT_DAYS"])
+        ATT_CONFIG['mode'] = Prompt.ask("   Mode", choices=["Daily", "Section"], default=DEFAULTS["ATT_MODE"])
+    else:
+        ATT_CONFIG = {'start_date': "2025-01-01", 'days': 0, 'mode': "Section"}
 
 if not Confirm.ask("Ready to generate?", default=True): exit()
 
@@ -157,27 +174,42 @@ def generate_date_range(start_str, days):
         current += datetime.timedelta(days=1)
     return dates
 
-def get_term_data(anchor_date_str):
-    """Calculates a realistic School Year term based on the attendance start date."""
-    dt = datetime.datetime.strptime(anchor_date_str, "%Y-%m-%d")
+def generate_term_schedule(anchor_year_str, num_terms, include_summer):
+    """
+    Generates a list of term dictionaries (cycle) based on config.
+    """
+    y_start = int(anchor_year_str)
+    y_end = y_start + 1
+    terms = []
 
-    # Jan-July maps to the previous Fall. August starts the new year.
-    start_year = dt.year - 1 if dt.month < 8 else dt.year
-    end_year = start_year + 1
-    
-    return {
-        "Term_name": f"{start_year}-{end_year}",
-        "Term_start": f"{start_year}-08-15",
-        "Term_end": f"{end_year}-06-15"
-    }
+    # 1. Core Terms
+    if num_terms == 2:
+        terms.append({"Term_name": f"Sem 1 {y_start}", "Term_start": f"{y_start}-08-15", "Term_end": f"{y_start}-12-20"})
+        terms.append({"Term_name": f"Sem 2 {y_end}",   "Term_start": f"{y_end}-01-05",   "Term_end": f"{y_end}-05-25"})
+    elif num_terms == 3:
+        terms.append({"Term_name": f"Tri 1 {y_start}", "Term_start": f"{y_start}-08-15", "Term_end": f"{y_start}-11-10"})
+        terms.append({"Term_name": f"Tri 2 {y_start}-{y_end}", "Term_start": f"{y_start}-11-15", "Term_end": f"{y_end}-02-25"})
+        terms.append({"Term_name": f"Tri 3 {y_end}",   "Term_start": f"{y_end}-03-01",   "Term_end": f"{y_end}-05-25"})
+    elif num_terms == 4:
+        terms.append({"Term_name": f"Q1 {y_start}", "Term_start": f"{y_start}-08-15", "Term_end": f"{y_start}-10-15"})
+        terms.append({"Term_name": f"Q2 {y_start}", "Term_start": f"{y_start}-10-20", "Term_end": f"{y_start}-12-20"})
+        terms.append({"Term_name": f"Q3 {y_end}",   "Term_start": f"{y_end}-01-05",   "Term_end": f"{y_end}-03-15"})
+        terms.append({"Term_name": f"Q4 {y_end}",   "Term_start": f"{y_end}-03-20",   "Term_end": f"{y_end}-05-25"})
+
+    # 2. Summer Term
+    if include_summer:
+        terms.append({"Term_name": f"Summer {y_end}", "Term_start": f"{y_end}-06-01", "Term_end": f"{y_end}-07-30"})
+        
+    return terms
 
 # ==========================================
 # 5. MAIN GENERATION LOOP
 # ==========================================
-base_output_dir = 'district_data'
+base_output_dir = 'district_data_output'
 
-# Pre-calculate term for the whole district based on config
-TERM_INFO = get_term_data(ATT_CONFIG['start_date'])
+# Generate the global term cycle based on user config
+TERM_CYCLE = generate_term_schedule(SCHOOL_START_YEAR, NUM_TERMS, INCLUDE_SUMMER)
+console.print(f"\n[yellow]Term Logic Active:[/yellow] {len(TERM_CYCLE)} terms in rotation.")
 
 with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), BarColumn(), console=console) as progress:
     main_task = progress.add_task("[green]Initializing...", total=NUM_DISTRICTS)
@@ -247,17 +279,34 @@ with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.descripti
                     "First_name": f, "Last_name": l, "Department": "Admin", "Title": "Staff"
                 })
 
-            # D. ROSTERING
+            # D. ROSTERING (With Dynamic Terms)
             grade_list = [str(g) if g > 0 else 'KG' for g in range(int(low) if low.isdigit() else 0, (int(high) if high.isdigit() else 12) + 1)]
+            
+            # Track teacher assignments for load balancing within this school
+            teacher_load_counts = {} 
 
             for sec_idx in range(SECTIONS_PER_SCHOOL):
                 sec_id = get_hex_id(8) if ID_MODE == 'alphanumeric' else get_sequential_id(base_id_seq, 50000 + sec_idx)
+                
+                # Pick Primary Teacher
                 p_teach = random.choice(school_teacher_ids)
+                
+                # Pick Secondary Teacher (Optional)
                 s_teach = random.choice([t for t in school_teacher_ids if t != p_teach]) if sec_idx == 0 else None
+                
+                # --- TERM ASSIGNMENT LOGIC ---
+                # 1. Get current load for this teacher
+                current_load = teacher_load_counts.get(p_teach, 0)
+                # 2. Determine term index based on modulo
+                term_idx = current_load % len(TERM_CYCLE)
+                selected_term = TERM_CYCLE[term_idx]
+                # 3. Update load count
+                teacher_load_counts[p_teach] = current_load + 1
+                # -----------------------------
+
                 s_grade = random.choice(grade_list)
                 s_subj = random.choice(['Math', 'Science', 'ELA', 'History'])
 
-                # SECTION SCHEMA UPDATE: ADDED TERM FIELDS
                 sections_data.append({
                     "School_id": school_id, 
                     "Section_id": sec_id, 
@@ -266,9 +315,9 @@ with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.descripti
                     "Name": f"{s_grade} - {s_subj} ({sec_idx+1})", 
                     "Grade": s_grade, 
                     "Subject": s_subj,
-                    "Term_name": TERM_INFO["Term_name"],
-                    "Term_start": TERM_INFO["Term_start"],
-                    "Term_end": TERM_INFO["Term_end"]
+                    "Term_name": selected_term["Term_name"],
+                    "Term_start": selected_term["Term_start"],
+                    "Term_end": selected_term["Term_end"]
                 })
 
                 # STUDENTS
@@ -281,12 +330,10 @@ with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.descripti
                         stu_id = get_sequential_id(base_id_seq, 200000 + (sec_idx * 100) + stu_idx)
                         stu_num, state_id = stu_id, stu_id
 
+                    # Gender-Aware Name Generation
                     gender_code = random.choice(['M', 'F'])
-                    if gender_code == 'M':
-                            f = fake.first_name_male()
-                    else:
-                            f = fake.first_name_female()
-
+                    if gender_code == 'M': f = fake.first_name_male()
+                    else: f = fake.first_name_female()
                     l = fake.last_name()
                     
                     has_disability = "Y" if random.random() < PROB_DISABILITY else "N"
@@ -299,7 +346,7 @@ with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.descripti
                         "School_id": school_id, "Student_id": stu_id, "Student_number": stu_num, "State_id": state_id,
                         "Last_name": l, "First_name": f, "Grade": s_grade, 
                         "Gender": gender_code,
-                        "DOB": generate_dob(s_grade), "Email_address": f"{f[0]}{l}{random.randint(10,99)}@{email_domain}".lower(),
+                        "DOB": generate_dob(s_grade), "Student_email": f"{f[0]}{l}{random.randint(10,99)}@{email_domain}".lower(),
                         "Race": random.choices(CLEVER_RACE_VALUES, weights=RACE_WEIGHTS)[0],
                         "Home_language": random.choices(LANG_KEYS, weights=LANG_WEIGHTS)[0],
                         "IEP_status": "Y" if random.random() < PROB_IEP else "N",

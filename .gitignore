@@ -1,5 +1,5 @@
 # Project-specific folders
-district_data
+district_data_output
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
