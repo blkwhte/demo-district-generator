@@ -83,23 +83,31 @@ district_data/
 You can permanently adjust the "Quick Start" baseline by editing the `DEFAULTS` dictionary at the top of `faker_district.py`:
 ```python
 DEFAULTS = {
+    "ID_MODE": "alphanumeric",
     "NUM_DISTRICTS": 1,
     "SCHOOLS_PER_DISTRICT": 5,
     "TEACHERS_PER_SCHOOL": 10,
+    "SECTIONS_PER_SCHOOL": 15,    # Increased slightly to show off term splitting
+    "STUDENTS_PER_SECTION": 20,
     
-    # Term Logic Configuration
-    "SCHOOL_START_YEAR": "2025", # The academic start year (e.g., 2025-2026)
-    "NUM_TERMS": 2,              # 2=Semesters, 3=Trimesters, 4=Quarters
-    "INCLUDE_SUMMER": True,      # Auto-generate a future summer term?
-
-    # Toggle extra datasets
-    "DO_ATTENDANCE": False, 
+    # Term Configuration
+    "SCHOOL_START_YEAR": "2025",
+    "NUM_TERMS": 2,               # 2=Semester, 3=Trimester, 4=Quarter
+    "INCLUDE_SUMMER": True,
+    
+    # Demographics
+    "PROB_FRL": 0.45, "PROB_IEP": 0.12, "PROB_ELL": 0.10,
+    "PROB_504": 0.05, "PROB_GIFTED": 0.08, "PROB_DISABILITY": 0.11,
+    
+    # Toggles
+    "DO_EXTENSIONS": False,
     "DO_RESOURCES": False,
-
-    # Adjust Demographic Probabilities (0.0 - 1.0)
-    "PROB_FRL": 0.45,       # Free/Reduced Lunch
-    "PROB_IEP": 0.12,       # Individualized Education Program
-    # ...
+    "DO_ATTENDANCE": False,
+    
+    # Attendance Context (Still needed if attendance is on)
+    "ATT_START_DATE": "2025-09-01", 
+    "ATT_DAYS": 5,
+    "ATT_MODE": "Section" 
 }
 ```
 
