@@ -16,23 +16,16 @@ console = Console()
 # ==========================================
 DEFAULTS = {
     "ID_MODE": "alphanumeric",
+    "OUTPUT_FORMAT": "csv",       # New Default: csv, json, or both
     "NUM_DISTRICTS": 1,
     "SCHOOLS_PER_DISTRICT": 5,
-    "TEACHERS_PER_SCHOOL": 15,
-    
-    # Recommendation: Set SECTIONS_PER_SCHOOL to Teachers * Number of desired terms.
-    # If you want Summer data, you need to budget "extra" sections in your configuration to push the rotation far enough to hit that Summer slot.
-    # Ex: If using Quarters (4 terms) and 15 teachers per school, set this to at least 60 (4 per teacher, 1 per term).
-    
-    # The default ratio is set for semesters: 2 sections for each term + one summer section for each teacher.
-    
-    # General rule of thumb: If adding summer terms, add additional sections per school at a ratio of 1:1 for sections:teachers per school.
-    "SECTIONS_PER_SCHOOL": 75,
+    "TEACHERS_PER_SCHOOL": 10,
+    "SECTIONS_PER_SCHOOL": 20,    # Kept high for term balancing
     "STUDENTS_PER_SECTION": 20,
     
     # Term Configuration
     "SCHOOL_START_YEAR": "2025",
-    "NUM_TERMS": 2,               # 2=Semester, 3=Trimester, 4=Quarter
+    "NUM_TERMS": 2,
     "INCLUDE_SUMMER": True,
     
     # Demographics
@@ -44,7 +37,7 @@ DEFAULTS = {
     "DO_RESOURCES": False,
     "DO_ATTENDANCE": False,
     
-    # Attendance Context (Still needed if attendance is on)
+    # Attendance Context
     "ATT_START_DATE": "2025-09-01", 
     "ATT_DAYS": 5,
     "ATT_MODE": "Section" 
@@ -95,19 +88,19 @@ DISABILITY_CODES = list(DISABILITY_MAP.keys())
 # ==========================================
 # 3. USER INPUT LOGIC
 # ==========================================
-console.rule("[bold green]Unified District Generator (v4.0 - Dynamic Terms)[/bold green]")
+console.rule("[bold green]Unified District Generator (v5.0 - CSV & JSON)[/bold green]")
 
 USE_DEFAULTS = Confirm.ask(f"Apply default settings?", default=False)
 
 if USE_DEFAULTS:
     ID_MODE = DEFAULTS["ID_MODE"]
+    OUTPUT_FORMAT = DEFAULTS["OUTPUT_FORMAT"]
     NUM_DISTRICTS = DEFAULTS["NUM_DISTRICTS"]
     SCHOOLS_PER_DISTRICT = DEFAULTS["SCHOOLS_PER_DISTRICT"]
     TEACHERS_PER_SCHOOL = DEFAULTS["TEACHERS_PER_SCHOOL"]
     SECTIONS_PER_SCHOOL = DEFAULTS["SECTIONS_PER_SCHOOL"]
     STUDENTS_PER_SECTION = DEFAULTS["STUDENTS_PER_SECTION"]
     
-    # Term Defaults
     SCHOOL_START_YEAR = DEFAULTS["SCHOOL_START_YEAR"]
     NUM_TERMS = DEFAULTS["NUM_TERMS"]
     INCLUDE_SUMMER = DEFAULTS["INCLUDE_SUMMER"]
@@ -122,11 +115,11 @@ if USE_DEFAULTS:
     DO_EXTENSIONS = DEFAULTS["DO_EXTENSIONS"]
     DO_RESOURCES = DEFAULTS["DO_RESOURCES"]
     DO_ATTENDANCE = DEFAULTS["DO_ATTENDANCE"]
-    
     ATT_CONFIG = {'start_date': DEFAULTS["ATT_START_DATE"], 'days': DEFAULTS["ATT_DAYS"], 'mode': DEFAULTS["ATT_MODE"]}
     console.print("[yellow]Defaults loaded![/yellow]")
 else:
     ID_MODE = Prompt.ask("Select ID Mode", choices=["sequential", "alphanumeric"], default=DEFAULTS["ID_MODE"])
+    OUTPUT_FORMAT = Prompt.ask("Output Format", choices=["csv", "json", "both"], default="csv")
     NUM_DISTRICTS = IntPrompt.ask("Districts", default=DEFAULTS["NUM_DISTRICTS"])
     SCHOOLS_PER_DISTRICT = IntPrompt.ask("Schools per District", default=DEFAULTS["SCHOOLS_PER_DISTRICT"])
     TEACHERS_PER_SCHOOL = IntPrompt.ask("Teachers per School", default=DEFAULTS["TEACHERS_PER_SCHOOL"])
@@ -148,8 +141,8 @@ else:
 
     console.print("\n[bold cyan]-- Supplemental Data --[/bold cyan]")
     DO_EXTENSIONS = Confirm.ask("Add Extension Fields?", default=DEFAULTS["DO_EXTENSIONS"])
-    DO_RESOURCES = Confirm.ask("Generate Resources.csv?", default=DEFAULTS["DO_RESOURCES"])
-    DO_ATTENDANCE = Confirm.ask("Generate Attendance.csv?", default=DEFAULTS["DO_ATTENDANCE"])
+    DO_RESOURCES = Confirm.ask("Generate Resources Data?", default=DEFAULTS["DO_RESOURCES"])
+    DO_ATTENDANCE = Confirm.ask("Generate Attendance Data?", default=DEFAULTS["DO_ATTENDANCE"])
 
     ATT_CONFIG = {}
     if DO_ATTENDANCE:
@@ -183,14 +176,10 @@ def generate_date_range(start_str, days):
     return dates
 
 def generate_term_schedule(anchor_year_str, num_terms, include_summer):
-    """
-    Generates a list of term dictionaries (cycle) based on config.
-    """
     y_start = int(anchor_year_str)
     y_end = y_start + 1
     terms = []
 
-    # 1. Core Terms
     if num_terms == 2:
         terms.append({"Term_name": f"Sem 1 {y_start}", "Term_start": f"{y_start}-08-15", "Term_end": f"{y_start}-12-20"})
         terms.append({"Term_name": f"Sem 2 {y_end}",   "Term_start": f"{y_end}-01-05",   "Term_end": f"{y_end}-05-25"})
@@ -204,18 +193,29 @@ def generate_term_schedule(anchor_year_str, num_terms, include_summer):
         terms.append({"Term_name": f"Q3 {y_end}",   "Term_start": f"{y_end}-01-05",   "Term_end": f"{y_end}-03-15"})
         terms.append({"Term_name": f"Q4 {y_end}",   "Term_start": f"{y_end}-03-20",   "Term_end": f"{y_end}-05-25"})
 
-    # 2. Summer Term
     if include_summer:
         terms.append({"Term_name": f"Summer {y_end}", "Term_start": f"{y_end}-06-01", "Term_end": f"{y_end}-07-30"})
-        
     return terms
+
+def save_data(data_list, filename, output_dir, fmt):
+    """Helper to save list of dicts to CSV, JSON, or Both."""
+    if not data_list: return
+    
+    df = pd.DataFrame(data_list)
+    
+    # 1. Save CSV
+    if fmt in ['csv', 'both']:
+        df.to_csv(os.path.join(output_dir, f"{filename}.csv"), index=False)
+        
+    # 2. Save JSON (Pretty Printed for Humans)
+    if fmt in ['json', 'both']:
+        # orient='records' creates a list of objects: [{"id": 1, ...}, {"id": 2, ...}]
+        df.to_json(os.path.join(output_dir, f"{filename}.json"), orient='records', indent=4)
 
 # ==========================================
 # 5. MAIN GENERATION LOOP
 # ==========================================
 base_output_dir = 'district_data_output'
-
-# Generate the global term cycle based on user config
 TERM_CYCLE = generate_term_schedule(SCHOOL_START_YEAR, NUM_TERMS, INCLUDE_SUMMER)
 console.print(f"\n[yellow]Term Logic Active:[/yellow] {len(TERM_CYCLE)} terms in rotation.")
 
@@ -223,7 +223,6 @@ with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.descripti
     main_task = progress.add_task("[green]Initializing...", total=NUM_DISTRICTS)
 
     for i in range(NUM_DISTRICTS):
-        # --- PHASE 1: CORE STRUCTURE ---
         dist_name = GENERIC_DISTRICT_NAMES[i % len(GENERIC_DISTRICT_NAMES)]
         progress.update(main_task, description=f"[green]Generating {dist_name}...[/green]")
         
@@ -233,6 +232,7 @@ with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.descripti
         district_prefix = str(10 + i) 
         base_id_seq = (i + 1) * 100000 
 
+        # Containers
         schools_data, teachers_data, staff_data = [], [], []
         students_data, sections_data, enrollments_data = [], [], []
 
@@ -240,17 +240,14 @@ with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.descripti
         for s_idx in range(SCHOOLS_PER_DISTRICT):
             if ID_MODE == 'alphanumeric': school_id = get_hex_id(random.choice([5, 6]))
             else: school_id = get_sequential_id(base_id_seq, s_idx * 100)
-
             school_type = random.choice(['Elementary', 'Middle', 'High', 'Academy'])
             school_code = f"{s_idx + 1:02d}"
             if 'Elementary' in school_type: low, high = 'KG', '5'
             elif 'Middle' in school_type: low, high = '6', '8'
             elif 'High' in school_type: low, high = '9', '12'
             else: low, high = 'KG', '12'
-
             valid_locations = REAL_LOCATIONS.get(state_abbr, [("City", "000")])
             city_name, zip_prefix = random.choice(valid_locations)
-
             schools_data.append({
                 "School_id": school_id, "School_name": f"{fake.last_name()} {school_type}",
                 "School_number": school_code, "Low_grade": low, "High_grade": high,
@@ -270,7 +267,6 @@ with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.descripti
                 else:
                     t_id = get_sequential_id(base_id_seq, (s_idx * 1000) + t_idx)
                     t_num, st_id = t_id, t_id
-
                 f, l = fake.first_name(), fake.last_name()
                 teachers_data.append({
                     "School_id": school_id, "Teacher_id": t_id, "Teacher_number": t_num, "State_teacher_id": st_id,
@@ -287,48 +283,28 @@ with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.descripti
                     "First_name": f, "Last_name": l, "Department": "Admin", "Title": "Staff"
                 })
 
-            # D. ROSTERING (With Dynamic Terms)
+            # D. ROSTERING
             grade_list = [str(g) if g > 0 else 'KG' for g in range(int(low) if low.isdigit() else 0, (int(high) if high.isdigit() else 12) + 1)]
-            
-            # Track teacher assignments for load balancing within this school
             teacher_load_counts = {} 
 
             for sec_idx in range(SECTIONS_PER_SCHOOL):
                 sec_id = get_hex_id(8) if ID_MODE == 'alphanumeric' else get_sequential_id(base_id_seq, 50000 + sec_idx)
-                
-                # Pick Primary Teacher
                 p_teach = random.choice(school_teacher_ids)
-                
-                # Pick Secondary Teacher (Optional)
                 s_teach = random.choice([t for t in school_teacher_ids if t != p_teach]) if sec_idx == 0 else None
                 
-                # --- TERM ASSIGNMENT LOGIC ---
-                # 1. Get current load for this teacher
                 current_load = teacher_load_counts.get(p_teach, 0)
-                # 2. Determine term index based on modulo
                 term_idx = current_load % len(TERM_CYCLE)
                 selected_term = TERM_CYCLE[term_idx]
-                # 3. Update load count
                 teacher_load_counts[p_teach] = current_load + 1
-                # -----------------------------
 
                 s_grade = random.choice(grade_list)
                 s_subj = random.choice(['Math', 'Science', 'ELA', 'History'])
-
                 sections_data.append({
-                    "School_id": school_id, 
-                    "Section_id": sec_id, 
-                    "Teacher_id": p_teach, 
-                    "Teacher_2_id": s_teach,
-                    "Name": f"{s_grade} - {s_subj} ({sec_idx+1})", 
-                    "Grade": s_grade, 
-                    "Subject": s_subj,
-                    "Term_name": selected_term["Term_name"],
-                    "Term_start": selected_term["Term_start"],
-                    "Term_end": selected_term["Term_end"]
+                    "School_id": school_id, "Section_id": sec_id, "Teacher_id": p_teach, "Teacher_2_id": s_teach,
+                    "Name": f"{s_grade} - {s_subj} ({sec_idx+1})", "Grade": s_grade, "Subject": s_subj,
+                    "Term_name": selected_term["Term_name"], "Term_start": selected_term["Term_start"], "Term_end": selected_term["Term_end"]
                 })
 
-                # STUDENTS
                 for stu_idx in range(STUDENTS_PER_SECTION):
                     if ID_MODE == 'alphanumeric':
                         stu_id = get_hex_id(6)
@@ -338,10 +314,8 @@ with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.descripti
                         stu_id = get_sequential_id(base_id_seq, 200000 + (sec_idx * 100) + stu_idx)
                         stu_num, state_id = stu_id, stu_id
 
-                    # Gender-Aware Name Generation
                     gender_code = random.choice(['M', 'F'])
-                    if gender_code == 'M': f = fake.first_name_male()
-                    else: f = fake.first_name_female()
+                    f = fake.first_name_male() if gender_code == 'M' else fake.first_name_female()
                     l = fake.last_name()
                     
                     has_disability = "Y" if random.random() < PROB_DISABILITY else "N"
@@ -352,8 +326,7 @@ with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.descripti
 
                     student_obj = {
                         "School_id": school_id, "Student_id": stu_id, "Student_number": stu_num, "State_id": state_id,
-                        "Last_name": l, "First_name": f, "Grade": s_grade, 
-                        "Gender": gender_code,
+                        "Last_name": l, "First_name": f, "Grade": s_grade, "Gender": gender_code,
                         "DOB": generate_dob(s_grade), "Student_email": f"{f[0]}{l}{random.randint(10,99)}@{email_domain}".lower(),
                         "Race": random.choices(CLEVER_RACE_VALUES, weights=RACE_WEIGHTS)[0],
                         "Home_language": random.choices(LANG_KEYS, weights=LANG_WEIGHTS)[0],
@@ -364,7 +337,6 @@ with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.descripti
                         "Gifted_status": "Y" if random.random() < PROB_GIFTED else "N",
                         "Disability_status": has_disability, "Disability_type": dis_type, "Disability_code": dis_code
                     }
-                    
                     if DO_EXTENSIONS:
                         student_obj['ext.locker_number'] = random.randint(100, 9999)
                         student_obj['ext.bus_route'] = random.choice(['Route A', 'Route B', 'Walk'])
@@ -377,7 +349,7 @@ with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.descripti
             admin_id = get_hex_id(7) if ID_MODE == 'alphanumeric' else str(base_id_seq + 99999)
             staff_data.insert(0, { "School_id": schools_data[0]['School_id'], "Staff_id": admin_id, "Staff_email": f"admin@{email_domain}", "First_name": "System", "Last_name": "Admin", "Department": "Central", "Title": "Admin" })
 
-        # --- PHASE 2: SUPPLEMENTAL GENERATION ---
+        # --- SUPPLEMENTAL GENERATION ---
         resources_data = []
         attendance_data = []
 
@@ -396,7 +368,6 @@ with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.descripti
         if DO_ATTENDANCE:
             progress.update(main_task, description=f"[cyan]Attendance for {dist_name}...[/cyan]")
             valid_dates = generate_date_range(ATT_CONFIG['start_date'], ATT_CONFIG['days'])
-            
             stu_to_sec = {}
             if ATT_CONFIG['mode'] == "Section":
                 for row in enrollments_data:
@@ -427,20 +398,24 @@ with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.descripti
                                 "attendance_status": status, "excuse_code": excuse
                             })
 
-        # --- PHASE 3: SAVING ---
+        # --- SAVING (CSV / JSON) ---
         progress.update(main_task, description=f"[yellow]Saving {dist_name}...[/yellow]")
         out_dir = os.path.join(base_output_dir, f"{dist_name}_Data")
         os.makedirs(out_dir, exist_ok=True)
         
-        pd.DataFrame(schools_data).to_csv(f"{out_dir}/schools.csv", index=False)
-        pd.DataFrame(teachers_data).to_csv(f"{out_dir}/teachers.csv", index=False)
-        pd.DataFrame(staff_data).to_csv(f"{out_dir}/staff.csv", index=False)
-        pd.DataFrame(students_data).drop_duplicates(subset=['Student_id']).to_csv(f"{out_dir}/students.csv", index=False)
-        pd.DataFrame(sections_data).to_csv(f"{out_dir}/sections.csv", index=False)
-        pd.DataFrame(enrollments_data).to_csv(f"{out_dir}/enrollments.csv", index=False)
+        save_data(schools_data, "schools", out_dir, OUTPUT_FORMAT)
+        save_data(teachers_data, "teachers", out_dir, OUTPUT_FORMAT)
+        save_data(staff_data, "staff", out_dir, OUTPUT_FORMAT)
         
-        if resources_data: pd.DataFrame(resources_data).to_csv(f"{out_dir}/resources.csv", index=False)
-        if attendance_data: pd.DataFrame(attendance_data).to_csv(f"{out_dir}/attendance.csv", index=False)
+        # Dedupe students before saving
+        unique_students_list = list({v['Student_id']:v for v in students_data}.values())
+        save_data(unique_students_list, "students", out_dir, OUTPUT_FORMAT)
+        
+        save_data(sections_data, "sections", out_dir, OUTPUT_FORMAT)
+        save_data(enrollments_data, "enrollments", out_dir, OUTPUT_FORMAT)
+        
+        if resources_data: save_data(resources_data, "resources", out_dir, OUTPUT_FORMAT)
+        if attendance_data: save_data(attendance_data, "attendance", out_dir, OUTPUT_FORMAT)
 
         progress.advance(main_task)
         console.print(f":white_check_mark: [green]{dist_name} Complete[/green]")
