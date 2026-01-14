@@ -2,6 +2,7 @@ import os
 import random
 import uuid
 import datetime
+import re
 import pandas as pd
 from faker import Faker
 from rich.console import Console
@@ -16,11 +17,11 @@ console = Console()
 # ==========================================
 DEFAULTS = {
     "ID_MODE": "alphanumeric",
-    "OUTPUT_FORMAT": "csv",       # New Default: csv, json, or both
+    "OUTPUT_FORMAT": "csv",
     "NUM_DISTRICTS": 1,
     "SCHOOLS_PER_DISTRICT": 5,
     "TEACHERS_PER_SCHOOL": 10,
-    "SECTIONS_PER_SCHOOL": 20,    # Kept high for term balancing
+    "SECTIONS_PER_SCHOOL": 20,
     "STUDENTS_PER_SECTION": 20,
     
     # Term Configuration
@@ -36,6 +37,7 @@ DEFAULTS = {
     "DO_EXTENSIONS": False,
     "DO_RESOURCES": False,
     "DO_ATTENDANCE": False,
+    "DO_CONTACTS": True, # New Toggle for Contact Generation
     
     # Attendance Context
     "ATT_START_DATE": "2025-09-01", 
@@ -88,7 +90,7 @@ DISABILITY_CODES = list(DISABILITY_MAP.keys())
 # ==========================================
 # 3. USER INPUT LOGIC
 # ==========================================
-console.rule("[bold green]Unified District Generator (v5.0 - CSV & JSON)[/bold green]")
+console.rule("[bold green]Demo District Generator (v6.0 - Student Contacts)[/bold green]")
 
 USE_DEFAULTS = Confirm.ask(f"Apply default settings?", default=False)
 
@@ -115,6 +117,8 @@ if USE_DEFAULTS:
     DO_EXTENSIONS = DEFAULTS["DO_EXTENSIONS"]
     DO_RESOURCES = DEFAULTS["DO_RESOURCES"]
     DO_ATTENDANCE = DEFAULTS["DO_ATTENDANCE"]
+    DO_CONTACTS = DEFAULTS["DO_CONTACTS"]
+
     ATT_CONFIG = {'start_date': DEFAULTS["ATT_START_DATE"], 'days': DEFAULTS["ATT_DAYS"], 'mode': DEFAULTS["ATT_MODE"]}
     console.print("[yellow]Defaults loaded![/yellow]")
 else:
@@ -141,6 +145,7 @@ else:
 
     console.print("\n[bold cyan]-- Supplemental Data --[/bold cyan]")
     DO_EXTENSIONS = Confirm.ask("Add Extension Fields?", default=DEFAULTS["DO_EXTENSIONS"])
+    DO_CONTACTS = Confirm.ask("Generate Student Contacts?", default=DEFAULTS["DO_CONTACTS"])
     DO_RESOURCES = Confirm.ask("Generate Resources Data?", default=DEFAULTS["DO_RESOURCES"])
     DO_ATTENDANCE = Confirm.ask("Generate Attendance Data?", default=DEFAULTS["DO_ATTENDANCE"])
 
@@ -175,6 +180,11 @@ def generate_date_range(start_str, days):
         current += datetime.timedelta(days=1)
     return dates
 
+def clean_phone():
+    """Returns a clean 10 digit number"""
+    raw = fake.phone_number()
+    return re.sub("[^0-9]", "", raw)[:10]
+
 def generate_term_schedule(anchor_year_str, num_terms, include_summer):
     y_start = int(anchor_year_str)
     y_end = y_start + 1
@@ -197,19 +207,73 @@ def generate_term_schedule(anchor_year_str, num_terms, include_summer):
         terms.append({"Term_name": f"Summer {y_end}", "Term_start": f"{y_end}-06-01", "Term_end": f"{y_end}-07-30"})
     return terms
 
+def generate_household_contacts(student_last_name, email_domain):
+    """
+    Generates a list of contact dictionaries based on household makeup probabilities.
+    Logic:
+      50% - Nuclear (Mom & Dad)
+      25% - Single Mother
+      10% - Single Father
+      10% - Blended (Mom & Step-Dad)
+      05% - Guardian (Grandparents/Other)
+    """
+    contacts = []
+    rand = random.random()
+    
+    # Common Generators
+    def make_contact(rel, type_str, last_n=None):
+        if not last_n: last_n = student_last_name
+        
+        # Gender inference for names (simple assumption based on relationship)
+        if rel in ["Father", "Step-father", "Grandfather", "Uncle"]:
+            f_name = fake.first_name_male()
+        else:
+            f_name = fake.first_name_female()
+            
+        return {
+            "Contact_relationship": rel,
+            "Contact_type": type_str,
+            "Contact_name": f"{f_name} {last_n}",
+            "Contact_phone": clean_phone(),
+            "Contact_phone_type": random.choice(["Cell", "Home", "Work"]),
+            "Contact_email": f"{f_name}.{last_n}@{email_domain}".lower(),
+            "Contact_sis_id": f"cont-{uuid.uuid4().hex[:8]}"
+        }
+
+    # SCENARIO 1: Nuclear (Mom & Dad)
+    if rand < 0.50:
+        contacts.append(make_contact("Mother", "Parent/Guardian"))
+        contacts.append(make_contact("Father", "Parent/Guardian"))
+
+    # SCENARIO 2: Single Mother
+    elif rand < 0.75:
+        contacts.append(make_contact("Mother", "Parent/Guardian"))
+        # Occasionally add an emergency contact who isn't parent
+        if random.random() < 0.3:
+            contacts.append(make_contact("Aunt", "Emergency"))
+
+    # SCENARIO 3: Single Father
+    elif rand < 0.85:
+        contacts.append(make_contact("Father", "Parent/Guardian"))
+
+    # SCENARIO 4: Blended (Mom + Step-Dad with different last name)
+    elif rand < 0.95:
+        contacts.append(make_contact("Mother", "Parent/Guardian"))
+        contacts.append(make_contact("Step-father", "Parent/Guardian", last_n=fake.last_name()))
+
+    # SCENARIO 5: Guardian (Grandparent)
+    else:
+        rel = random.choice(["Grandmother", "Grandfather", "Aunt"])
+        contacts.append(make_contact(rel, "Guardian"))
+
+    return contacts
+
 def save_data(data_list, filename, output_dir, fmt):
-    """Helper to save list of dicts to CSV, JSON, or Both."""
     if not data_list: return
-    
     df = pd.DataFrame(data_list)
-    
-    # 1. Save CSV
     if fmt in ['csv', 'both']:
         df.to_csv(os.path.join(output_dir, f"{filename}.csv"), index=False)
-        
-    # 2. Save JSON (Pretty Printed for Humans)
     if fmt in ['json', 'both']:
-        # orient='records' creates a list of objects: [{"id": 1, ...}, {"id": 2, ...}]
         df.to_json(os.path.join(output_dir, f"{filename}.json"), orient='records', indent=4)
 
 # ==========================================
@@ -324,10 +388,10 @@ with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.descripti
                         code = random.choice(DISABILITY_CODES)
                         dis_code, dis_type = code, DISABILITY_MAP[code]
 
-                    student_obj = {
+                    base_student_obj = {
                         "School_id": school_id, "Student_id": stu_id, "Student_number": stu_num, "State_id": state_id,
                         "Last_name": l, "First_name": f, "Grade": s_grade, "Gender": gender_code,
-                        "DOB": generate_dob(s_grade), "Student_email": f"{f[0]}{l}{random.randint(10,99)}@{email_domain}".lower(),
+                        "DOB": generate_dob(s_grade), "Email_address": f"{f[0]}{l}{random.randint(10,99)}@{email_domain}".lower(),
                         "Race": random.choices(CLEVER_RACE_VALUES, weights=RACE_WEIGHTS)[0],
                         "Home_language": random.choices(LANG_KEYS, weights=LANG_WEIGHTS)[0],
                         "IEP_status": "Y" if random.random() < PROB_IEP else "N",
@@ -335,13 +399,28 @@ with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.descripti
                         "ELL_status": "Y" if random.random() < PROB_ELL else "N",
                         "Section_504_status": "Y" if random.random() < PROB_504 else "N",
                         "Gifted_status": "Y" if random.random() < PROB_GIFTED else "N",
-                        "Disability_status": has_disability, "Disability_type": dis_type, "Disability_code": dis_code
+                        "Disability_status": has_disability, 
+                        "Disability_type": dis_type, 
+                        # "Disability_code": dis_code
                     }
                     if DO_EXTENSIONS:
-                        student_obj['ext.locker_number'] = random.randint(100, 9999)
-                        student_obj['ext.bus_route'] = random.choice(['Route A', 'Route B', 'Walk'])
+                        base_student_obj['ext.locker_number'] = random.randint(100, 9999)
+                        base_student_obj['ext.bus_route'] = random.choice(['Route A', 'Route B', 'Walk'])
 
-                    students_data.append(student_obj)
+                    # --- CONTACTS LOGIC ---
+                    if DO_CONTACTS:
+                        # 1. Generate household (list of dicts)
+                        household = generate_household_contacts(l, email_domain)
+                        # 2. Iterate and create a new row for each contact
+                        for contact in household:
+                            row = base_student_obj.copy()
+                            row.update(contact) # Add Contact Fields
+                            students_data.append(row)
+                    else:
+                        # No contacts, just append the single student row
+                        students_data.append(base_student_obj)
+
+                    # Enrollments (Only ONE per student per section, regardless of contact rows)
                     enrollments_data.append({"School_id": school_id, "Section_id": sec_id, "Student_id": stu_id})
 
         # E. ADMIN
@@ -375,11 +454,12 @@ with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.descripti
                     if sid not in stu_to_sec: stu_to_sec[sid] = []
                     stu_to_sec[sid].append(row['Section_id'])
             
-            unique_students = {s['Student_id']: s['School_id'] for s in students_data}
+            # For attendance, we need unique student IDs, so we dedupe the list from students_data
+            unique_student_map = {v['Student_id']: v['School_id'] for v in students_data}
 
             for date_obj in valid_dates:
                 date_str = date_obj.strftime("%Y-%m-%d")
-                for sid, sch_id in unique_students.items():
+                for sid, sch_id in unique_student_map.items():
                     if ATT_CONFIG['mode'] == "Daily":
                         status = random.choices(["present", "absent", "tardy"], weights=[0.90, 0.05, 0.05])[0]
                         excuse = f"EXC-{random.randint(100,999)}" if status != "present" else ""
@@ -407,9 +487,8 @@ with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.descripti
         save_data(teachers_data, "teachers", out_dir, OUTPUT_FORMAT)
         save_data(staff_data, "staff", out_dir, OUTPUT_FORMAT)
         
-        # Dedupe students before saving
-        unique_students_list = list({v['Student_id']:v for v in students_data}.values())
-        save_data(unique_students_list, "students", out_dir, OUTPUT_FORMAT)
+        # Students data now contains duplicates for contacts, so we save it as is.
+        save_data(students_data, "students", out_dir, OUTPUT_FORMAT)
         
         save_data(sections_data, "sections", out_dir, OUTPUT_FORMAT)
         save_data(enrollments_data, "enrollments", out_dir, OUTPUT_FORMAT)
