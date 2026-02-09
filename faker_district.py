@@ -18,10 +18,17 @@ console = Console()
 DEFAULTS = {
     "ID_MODE": "alphanumeric",
     "OUTPUT_FORMAT": "csv",
+    "OUTPUT_SCHEMA": "Standard", # Standard, AnySchool, or Both
+    
+    # Email Settings
+    "EMAIL_DOMAIN": "",          # Empty = auto-generated per district
+    "USERNAME_FMT": "first.last",# first.last, f.last, flast
+    
+    # Structure
     "NUM_DISTRICTS": 1,
     "SCHOOLS_PER_DISTRICT": 5,
     "TEACHERS_PER_SCHOOL": 10,
-    "SECTIONS_PER_SCHOOL": 30,
+    "SECTIONS_PER_SCHOOL": 20,
     "STUDENTS_PER_SECTION": 20,
     
     # Term Configuration
@@ -37,9 +44,8 @@ DEFAULTS = {
     "DO_EXTENSIONS": False,
     "DO_RESOURCES": False,
     "DO_ATTENDANCE": False,
-    "DO_CONTACTS": True, # New Toggle for Contact Generation
+    "DO_CONTACTS": True,
     
-    # Attendance Context
     "ATT_START_DATE": "2025-09-01", 
     "ATT_DAYS": 5,
     "ATT_MODE": "Section" 
@@ -90,13 +96,17 @@ DISABILITY_CODES = list(DISABILITY_MAP.keys())
 # ==========================================
 # 3. USER INPUT LOGIC
 # ==========================================
-console.rule("[bold green]Demo District Generator (v6.0 - Student Contacts)[/bold green]")
+console.rule("[bold green]Unified District Generator (v8.0 - QoL Update)[/bold green]")
 
-USE_DEFAULTS = Confirm.ask(f"Apply default settings?", default=False)
+USE_DEFAULTS = Confirm.ask(f"Apply ALL default settings?", default=False)
 
 if USE_DEFAULTS:
     ID_MODE = DEFAULTS["ID_MODE"]
     OUTPUT_FORMAT = DEFAULTS["OUTPUT_FORMAT"]
+    OUTPUT_SCHEMA = DEFAULTS["OUTPUT_SCHEMA"]
+    EMAIL_DOMAIN = DEFAULTS["EMAIL_DOMAIN"]
+    USERNAME_FMT = DEFAULTS["USERNAME_FMT"]
+    
     NUM_DISTRICTS = DEFAULTS["NUM_DISTRICTS"]
     SCHOOLS_PER_DISTRICT = DEFAULTS["SCHOOLS_PER_DISTRICT"]
     TEACHERS_PER_SCHOOL = DEFAULTS["TEACHERS_PER_SCHOOL"]
@@ -115,34 +125,56 @@ if USE_DEFAULTS:
     PROB_DISABILITY = DEFAULTS["PROB_DISABILITY"]
     
     DO_EXTENSIONS = DEFAULTS["DO_EXTENSIONS"]
+    DO_CONTACTS = DEFAULTS["DO_CONTACTS"]
     DO_RESOURCES = DEFAULTS["DO_RESOURCES"]
     DO_ATTENDANCE = DEFAULTS["DO_ATTENDANCE"]
-    DO_CONTACTS = DEFAULTS["DO_CONTACTS"]
 
     ATT_CONFIG = {'start_date': DEFAULTS["ATT_START_DATE"], 'days': DEFAULTS["ATT_DAYS"], 'mode': DEFAULTS["ATT_MODE"]}
     console.print("[yellow]Defaults loaded![/yellow]")
 else:
+    # --- Basic Settings ---
     ID_MODE = Prompt.ask("Select ID Mode", choices=["sequential", "alphanumeric"], default=DEFAULTS["ID_MODE"])
+    OUTPUT_SCHEMA = Prompt.ask("Output Schema", choices=["Standard", "AnySchool", "Both"], default="Standard")
     OUTPUT_FORMAT = Prompt.ask("Output Format", choices=["csv", "json", "both"], default="csv")
+
+    # --- Email Settings ---
+    console.print("\n[bold cyan]-- Email Settings --[/bold cyan]")
+    EMAIL_DOMAIN = Prompt.ask("Custom Email Domain (Leave blank for default)", default="")
+    USERNAME_FMT = Prompt.ask("Username Format", choices=["first.last", "f.last", "f_last", "flast"], default="first.last")
+
+    # --- Structure ---
+    console.print("\n[bold cyan]-- Structure --[/bold cyan]")
     NUM_DISTRICTS = IntPrompt.ask("Districts", default=DEFAULTS["NUM_DISTRICTS"])
     SCHOOLS_PER_DISTRICT = IntPrompt.ask("Schools per District", default=DEFAULTS["SCHOOLS_PER_DISTRICT"])
     TEACHERS_PER_SCHOOL = IntPrompt.ask("Teachers per School", default=DEFAULTS["TEACHERS_PER_SCHOOL"])
     SECTIONS_PER_SCHOOL = IntPrompt.ask("Sections per School", default=DEFAULTS["SECTIONS_PER_SCHOOL"])
     STUDENTS_PER_SECTION = IntPrompt.ask("Students per Section", default=DEFAULTS["STUDENTS_PER_SECTION"])
 
+    # --- Term Logic ---
     console.print("\n[bold cyan]-- Term Configuration --[/bold cyan]")
     SCHOOL_START_YEAR = Prompt.ask("School Start Year (YYYY)", default=DEFAULTS["SCHOOL_START_YEAR"])
     NUM_TERMS = IntPrompt.ask("Terms per Year (2=Sem, 3=Tri, 4=Qtr)", choices=["2", "3", "4"], default=DEFAULTS["NUM_TERMS"])
     INCLUDE_SUMMER = Confirm.ask("Include Summer Session?", default=DEFAULTS["INCLUDE_SUMMER"])
 
+    # --- Demographics (QoL UPDATE) ---
     console.print("\n[bold yellow]-- Demographics --[/bold yellow]")
-    PROB_FRL = FloatPrompt.ask("Prob. FRL", default=DEFAULTS["PROB_FRL"])
-    PROB_IEP = FloatPrompt.ask("Prob. IEP", default=DEFAULTS["PROB_IEP"])
-    PROB_ELL = FloatPrompt.ask("Prob. ELL", default=DEFAULTS["PROB_ELL"])
-    PROB_504 = FloatPrompt.ask("Prob. 504", default=DEFAULTS["PROB_504"])
-    PROB_GIFTED = FloatPrompt.ask("Prob. Gifted", default=DEFAULTS["PROB_GIFTED"])
-    PROB_DISABILITY = FloatPrompt.ask("Prob. Disability", default=DEFAULTS["PROB_DISABILITY"])
+    if Confirm.ask("Use default demographic probabilities?", default=True):
+        PROB_FRL = DEFAULTS["PROB_FRL"]
+        PROB_IEP = DEFAULTS["PROB_IEP"]
+        PROB_ELL = DEFAULTS["PROB_ELL"]
+        PROB_504 = DEFAULTS["PROB_504"]
+        PROB_GIFTED = DEFAULTS["PROB_GIFTED"]
+        PROB_DISABILITY = DEFAULTS["PROB_DISABILITY"]
+        console.print("[dim]Using defaults (FRL: 45%, IEP: 12%, etc.)[/dim]")
+    else:
+        PROB_FRL = FloatPrompt.ask("Prob. FRL", default=DEFAULTS["PROB_FRL"])
+        PROB_IEP = FloatPrompt.ask("Prob. IEP", default=DEFAULTS["PROB_IEP"])
+        PROB_ELL = FloatPrompt.ask("Prob. ELL", default=DEFAULTS["PROB_ELL"])
+        PROB_504 = FloatPrompt.ask("Prob. 504", default=DEFAULTS["PROB_504"])
+        PROB_GIFTED = FloatPrompt.ask("Prob. Gifted", default=DEFAULTS["PROB_GIFTED"])
+        PROB_DISABILITY = FloatPrompt.ask("Prob. Disability", default=DEFAULTS["PROB_DISABILITY"])
 
+    # --- Supplemental ---
     console.print("\n[bold cyan]-- Supplemental Data --[/bold cyan]")
     DO_EXTENSIONS = Confirm.ask("Add Extension Fields?", default=DEFAULTS["DO_EXTENSIONS"])
     DO_CONTACTS = Confirm.ask("Generate Student Contacts?", default=DEFAULTS["DO_CONTACTS"])
@@ -181,9 +213,22 @@ def generate_date_range(start_str, days):
     return dates
 
 def clean_phone():
-    """Returns a clean 10 digit number"""
     raw = fake.phone_number()
     return re.sub("[^0-9]", "", raw)[:10]
+
+def generate_email_username(first, last, domain, fmt):
+    f = first.lower().replace(" ", "")
+    l = last.lower().replace(" ", "")
+    
+    if fmt == "first.last": username = f"{f}.{l}"
+    elif fmt == "f.last": username = f"{f[0]}.{l}"
+    elif fmt == "f_last": username = f"{f[0]}_{l}"
+    elif fmt == "flast": username = f"{f}{l}"
+    else: username = f"{f}.{l}"
+    
+    # Add simple randomness to avoid dupes
+    rand_suffix = str(random.randint(10,99))
+    return f"{username}{rand_suffix}", f"{username}{rand_suffix}@{domain}"
 
 def generate_term_schedule(anchor_year_str, num_terms, include_summer):
     y_start = int(anchor_year_str)
@@ -208,65 +253,92 @@ def generate_term_schedule(anchor_year_str, num_terms, include_summer):
     return terms
 
 def generate_household_contacts(student_last_name, email_domain):
-    """
-    Generates a list of contact dictionaries based on household makeup probabilities.
-    Logic:
-      50% - Nuclear (Mom & Dad)
-      25% - Single Mother
-      10% - Single Father
-      10% - Blended (Mom & Step-Dad)
-      05% - Guardian (Grandparents/Other)
-    """
     contacts = []
     rand = random.random()
-    
-    # Common Generators
     def make_contact(rel, type_str, last_n=None):
         if not last_n: last_n = student_last_name
-        
-        # Gender inference for names (simple assumption based on relationship)
-        if rel in ["Father", "Step-father", "Grandfather", "Uncle"]:
-            f_name = fake.first_name_male()
-        else:
-            f_name = fake.first_name_female()
-            
+        if rel in ["Father", "Step-father", "Grandfather", "Uncle"]: f_name = fake.first_name_male()
+        else: f_name = fake.first_name_female()
         return {
-            "Contact_relationship": rel,
-            "Contact_type": type_str,
-            "Contact_name": f"{f_name} {last_n}",
-            "Contact_phone": clean_phone(),
+            "Contact_relationship": rel, "Contact_type": type_str,
+            "Contact_name": f"{f_name} {last_n}", "Contact_phone": clean_phone(),
             "Contact_phone_type": random.choice(["Cell", "Home", "Work"]),
             "Contact_email": f"{f_name}.{last_n}@{email_domain}".lower(),
             "Contact_sis_id": f"cont-{uuid.uuid4().hex[:8]}"
         }
-
-    # SCENARIO 1: Nuclear (Mom & Dad)
     if rand < 0.50:
         contacts.append(make_contact("Mother", "Parent/Guardian"))
         contacts.append(make_contact("Father", "Parent/Guardian"))
-
-    # SCENARIO 2: Single Mother
     elif rand < 0.75:
         contacts.append(make_contact("Mother", "Parent/Guardian"))
-        # Occasionally add an emergency contact who isn't parent
-        if random.random() < 0.3:
-            contacts.append(make_contact("Aunt", "Emergency"))
-
-    # SCENARIO 3: Single Father
-    elif rand < 0.85:
-        contacts.append(make_contact("Father", "Parent/Guardian"))
-
-    # SCENARIO 4: Blended (Mom + Step-Dad with different last name)
+        if random.random() < 0.3: contacts.append(make_contact("Aunt", "Emergency"))
+    elif rand < 0.85: contacts.append(make_contact("Father", "Parent/Guardian"))
     elif rand < 0.95:
         contacts.append(make_contact("Mother", "Parent/Guardian"))
         contacts.append(make_contact("Step-father", "Parent/Guardian", last_n=fake.last_name()))
-
-    # SCENARIO 5: Guardian (Grandparent)
     else:
         rel = random.choice(["Grandmother", "Grandfather", "Aunt"])
         contacts.append(make_contact(rel, "Guardian"))
-
     return contacts
+
+# --- ANYSCHOOL TRANSFORMER ---
+def transform_to_anyschool(students, teachers, staff, sections, enrollments, schools):
+    school_map = {s['School_id']: {'name': s['School_name'], 'number': s['School_number']} for s in schools}
+    users_out = []
+    
+    def fmt_date(iso_date):
+        if not iso_date: return ""
+        try:
+            return datetime.datetime.strptime(iso_date, "%Y-%m-%d").strftime("%m/%d/%Y")
+        except: return iso_date
+
+    seen_students = set()
+    for s in students:
+        if s['Student_id'] in seen_students: continue
+        seen_students.add(s['Student_id'])
+        username = s.get('Username', s['Email_address'].split('@')[0])
+        users_out.append({
+            "School_name": school_map[s['School_id']]['name'], "User_type": "student",
+            "User_id": s['Student_id'], "First_name": s['First_name'], "Last_name": s['Last_name'],
+            "Email": s['Email_address'], "Username": username,
+            "Grade": s['Grade'], "DOB": fmt_date(s['DOB'])
+        })
+
+    for t in teachers:
+        username = t['Teacher_email'].split('@')[0]
+        users_out.append({
+            "School_name": school_map[t['School_id']]['name'], "User_type": "teacher",
+            "User_id": t['Teacher_id'], "First_name": t['First_name'], "Last_name": t['Last_name'],
+            "Email": t['Teacher_email'], "Username": username, "Grade": "", "DOB": ""
+        })
+
+    for st in staff:
+        username = st['Staff_email'].split('@')[0]
+        users_out.append({
+            "School_name": school_map[st['School_id']]['name'], "User_type": "staff",
+            "User_id": st['Staff_id'], "First_name": st['First_name'], "Last_name": st['Last_name'],
+            "Email": st['Staff_email'], "Username": username, "Grade": "", "DOB": ""
+        })
+
+    sections_out = []
+    section_lookup = {sec['Section_id']: sec for sec in sections}
+    
+    for enr in enrollments:
+        sec_data = section_lookup.get(enr['Section_id'])
+        if not sec_data: continue
+        sch_info = school_map[enr['School_id']]
+        sec_name = sec_data['Name']
+        period_match = re.search(r'\((.*?)\)', sec_name)
+        period = period_match.group(1) if period_match else "1"
+
+        sections_out.append({
+            "School_name": sch_info['name'], "Section_id": enr['Section_id'],
+            "User_id": enr['Student_id'], "Teacher_id": sec_data['Teacher_id'],
+            "School_number": sch_info['number'], "Subject": sec_data['Subject'],
+            "Period": period, "Section_name": sec_name
+        })
+
+    return users_out, sections_out
 
 def save_data(data_list, filename, output_dir, fmt):
     if not data_list: return
@@ -290,9 +362,11 @@ with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.descripti
         dist_name = GENERIC_DISTRICT_NAMES[i % len(GENERIC_DISTRICT_NAMES)]
         progress.update(main_task, description=f"[green]Generating {dist_name}...[/green]")
         
+        if EMAIL_DOMAIN: email_domain = EMAIL_DOMAIN
+        else: email_domain = f"{dist_name.lower()}.k12.edu"
+
         state_key = STATE_KEYS[i % len(STATE_KEYS)]
         state_name, state_abbr = STATE_MAPPINGS[state_key]
-        email_domain = f"{dist_name.lower()}.k12.edu"
         district_prefix = str(10 + i) 
         base_id_seq = (i + 1) * 100000 
 
@@ -331,10 +405,14 @@ with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.descripti
                 else:
                     t_id = get_sequential_id(base_id_seq, (s_idx * 1000) + t_idx)
                     t_num, st_id = t_id, t_id
+                
                 f, l = fake.first_name(), fake.last_name()
+                username, email = generate_email_username(f, l, email_domain, USERNAME_FMT)
+                
                 teachers_data.append({
                     "School_id": school_id, "Teacher_id": t_id, "Teacher_number": t_num, "State_teacher_id": st_id,
-                    "Teacher_email": f"{f[0].lower()}{l.lower()}@{email_domain}", "First_name": f, "Last_name": l, "Title": "Teacher"
+                    "Teacher_email": email, "Username": username, 
+                    "First_name": f, "Last_name": l, "Title": "Teacher"
                 })
                 school_teacher_ids.append(t_id)
 
@@ -342,8 +420,10 @@ with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.descripti
             for st_idx in range(2):
                 st_id = get_hex_id(7) if ID_MODE == 'alphanumeric' else get_sequential_id(base_id_seq, 9000 + st_idx)
                 f, l = fake.first_name(), fake.last_name()
+                username, email = generate_email_username(f, l, email_domain, USERNAME_FMT)
+                
                 staff_data.append({
-                    "School_id": school_id, "Staff_id": st_id, "Staff_email": f"{f}.{l}@{email_domain}",
+                    "School_id": school_id, "Staff_id": st_id, "Staff_email": email,
                     "First_name": f, "Last_name": l, "Department": "Admin", "Title": "Staff"
                 })
 
@@ -381,7 +461,8 @@ with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.descripti
                     gender_code = random.choice(['M', 'F'])
                     f = fake.first_name_male() if gender_code == 'M' else fake.first_name_female()
                     l = fake.last_name()
-                    
+                    username, email = generate_email_username(f, l, email_domain, USERNAME_FMT)
+
                     has_disability = "Y" if random.random() < PROB_DISABILITY else "N"
                     dis_code, dis_type = ("", "")
                     if has_disability == "Y":
@@ -391,7 +472,7 @@ with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.descripti
                     base_student_obj = {
                         "School_id": school_id, "Student_id": stu_id, "Student_number": stu_num, "State_id": state_id,
                         "Last_name": l, "First_name": f, "Grade": s_grade, "Gender": gender_code,
-                        "DOB": generate_dob(s_grade), "Email_address": f"{f[0]}{l}{random.randint(10,99)}@{email_domain}".lower(),
+                        "DOB": generate_dob(s_grade), "Email_address": email, "Username": username,
                         "Race": random.choices(CLEVER_RACE_VALUES, weights=RACE_WEIGHTS)[0],
                         "Home_language": random.choices(LANG_KEYS, weights=LANG_WEIGHTS)[0],
                         "IEP_status": "Y" if random.random() < PROB_IEP else "N",
@@ -399,28 +480,21 @@ with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.descripti
                         "ELL_status": "Y" if random.random() < PROB_ELL else "N",
                         "Section_504_status": "Y" if random.random() < PROB_504 else "N",
                         "Gifted_status": "Y" if random.random() < PROB_GIFTED else "N",
-                        "Disability_status": has_disability, 
-                        "Disability_type": dis_type, 
-                        # "Disability_code": dis_code
+                        "Disability_status": has_disability, "Disability_type": dis_type, "Disability_code": dis_code
                     }
                     if DO_EXTENSIONS:
                         base_student_obj['ext.locker_number'] = random.randint(100, 9999)
                         base_student_obj['ext.bus_route'] = random.choice(['Route A', 'Route B', 'Walk'])
 
-                    # --- CONTACTS LOGIC ---
                     if DO_CONTACTS:
-                        # 1. Generate household (list of dicts)
                         household = generate_household_contacts(l, email_domain)
-                        # 2. Iterate and create a new row for each contact
                         for contact in household:
                             row = base_student_obj.copy()
-                            row.update(contact) # Add Contact Fields
+                            row.update(contact)
                             students_data.append(row)
                     else:
-                        # No contacts, just append the single student row
                         students_data.append(base_student_obj)
 
-                    # Enrollments (Only ONE per student per section, regardless of contact rows)
                     enrollments_data.append({"School_id": school_id, "Section_id": sec_id, "Student_id": stu_id})
 
         # E. ADMIN
@@ -428,73 +502,36 @@ with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.descripti
             admin_id = get_hex_id(7) if ID_MODE == 'alphanumeric' else str(base_id_seq + 99999)
             staff_data.insert(0, { "School_id": schools_data[0]['School_id'], "Staff_id": admin_id, "Staff_email": f"admin@{email_domain}", "First_name": "System", "Last_name": "Admin", "Department": "Central", "Title": "Admin" })
 
-        # --- SUPPLEMENTAL GENERATION ---
-        resources_data = []
-        attendance_data = []
-
-        if DO_RESOURCES:
-            progress.update(main_task, description=f"[cyan]Resources for {dist_name}...[/cyan]")
-            library_pool = [
-                ("District Math: Algebra I", "student,teacher"), ("District Math: Geometry", "student,teacher"),
-                ("Virtual Lab: Biology", "student,teacher"), ("District Digital Library", "student,teacher"),
-                ("World Atlas Interactive", "student,teacher"), ("Attendance Dashboard", "teacher")
-            ]
-            for title, roles in library_pool:
-                prefix = title.split(':')[0][:3].upper().replace(" ", "")
-                res_id = f"RES-{prefix}-{str(abs(hash(title)))[:4]}"
-                resources_data.append({"resource_id": res_id, "title": title, "roles": roles})
-
-        if DO_ATTENDANCE:
-            progress.update(main_task, description=f"[cyan]Attendance for {dist_name}...[/cyan]")
-            valid_dates = generate_date_range(ATT_CONFIG['start_date'], ATT_CONFIG['days'])
-            stu_to_sec = {}
-            if ATT_CONFIG['mode'] == "Section":
-                for row in enrollments_data:
-                    sid = row['Student_id']
-                    if sid not in stu_to_sec: stu_to_sec[sid] = []
-                    stu_to_sec[sid].append(row['Section_id'])
-            
-            # For attendance, we need unique student IDs, so we dedupe the list from students_data
-            unique_student_map = {v['Student_id']: v['School_id'] for v in students_data}
-
-            for date_obj in valid_dates:
-                date_str = date_obj.strftime("%Y-%m-%d")
-                for sid, sch_id in unique_student_map.items():
-                    if ATT_CONFIG['mode'] == "Daily":
-                        status = random.choices(["present", "absent", "tardy"], weights=[0.90, 0.05, 0.05])[0]
-                        excuse = f"EXC-{random.randint(100,999)}" if status != "present" else ""
-                        attendance_data.append({
-                            "sis_id": f"att-{uuid.uuid4().hex[:10]}", "school_id": sch_id, "student_id": sid,
-                            "section_id": "", "attendance_date": date_str, "attendance_type": "daily",
-                            "attendance_status": status, "excuse_code": excuse
-                        })
-                    else:
-                        for sec_id in stu_to_sec.get(sid, []):
-                            status = random.choices(["present", "absent", "tardy"], weights=[0.92, 0.04, 0.04])[0]
-                            excuse = f"EXC-{random.randint(100,999)}" if status != "present" else ""
-                            attendance_data.append({
-                                "sis_id": f"att-{uuid.uuid4().hex[:10]}", "school_id": sch_id, "student_id": sid,
-                                "section_id": sec_id, "attendance_date": date_str, "attendance_type": "section",
-                                "attendance_status": status, "excuse_code": excuse
-                            })
-
-        # --- SAVING (CSV / JSON) ---
+        # --- SAVING LOGIC ---
         progress.update(main_task, description=f"[yellow]Saving {dist_name}...[/yellow]")
         out_dir = os.path.join(base_output_dir, f"{dist_name}_Data")
         os.makedirs(out_dir, exist_ok=True)
         
-        save_data(schools_data, "schools", out_dir, OUTPUT_FORMAT)
-        save_data(teachers_data, "teachers", out_dir, OUTPUT_FORMAT)
-        save_data(staff_data, "staff", out_dir, OUTPUT_FORMAT)
-        
-        # Students data now contains duplicates for contacts, so we save it as is.
-        save_data(students_data, "students", out_dir, OUTPUT_FORMAT)
-        
-        save_data(sections_data, "sections", out_dir, OUTPUT_FORMAT)
-        save_data(enrollments_data, "enrollments", out_dir, OUTPUT_FORMAT)
-        
-        if resources_data: save_data(resources_data, "resources", out_dir, OUTPUT_FORMAT)
-        if attendance_data: save_data(attendance_data, "attendance", out_dir, OUTPUT_FORMAT)
+        # 1. Standard Output
+        if OUTPUT_SCHEMA in ["Standard", "Both"]:
+            std_dir = os.path.join(out_dir, "Standard") if OUTPUT_SCHEMA == "Both" else out_dir
+            os.makedirs(std_dir, exist_ok=True)
+            save_data(schools_data, "schools", std_dir, OUTPUT_FORMAT)
+            save_data(teachers_data, "teachers", std_dir, OUTPUT_FORMAT)
+            save_data(staff_data, "staff", std_dir, OUTPUT_FORMAT)
+            save_data(students_data, "students", std_dir, OUTPUT_FORMAT)
+            save_data(sections_data, "sections", std_dir, OUTPUT_FORMAT)
+            save_data(enrollments_data, "enrollments", std_dir, OUTPUT_FORMAT)
+
+        # 2. AnySchool Output
+        if OUTPUT_SCHEMA in ["AnySchool", "Both"]:
+            as_dir = os.path.join(out_dir, "AnySchool") if OUTPUT_SCHEMA == "Both" else out_dir
+            os.makedirs(as_dir, exist_ok=True)
+            unique_students_raw = list({v['Student_id']:v for v in students_data}.values())
+            users_csv, sections_csv = transform_to_anyschool(unique_students_raw, teachers_data, staff_data, sections_data, enrollments_data, schools_data)
+            save_data(users_csv, "users", as_dir, OUTPUT_FORMAT)
+            save_data(sections_csv, "sections", as_dir, OUTPUT_FORMAT)
+
+        # 3. Extras
+        if DO_RESOURCES:
+            res_dir = os.path.join(out_dir, "Standard") if OUTPUT_SCHEMA == "Both" else out_dir
+            # Re-generate resources to ensure path correctness or use global list
+            save_data(resources_data, "resources", res_dir, OUTPUT_FORMAT)
 
         progress.advance(main_task)
         console.print(f":white_check_mark: [green]{dist_name} Complete[/green]")
