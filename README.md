@@ -1,147 +1,172 @@
-# Clever Demo District generator
 
-A high-performance Python utility for generating synthetic school district data that is **Clever Schema Compliant**. 
+# Clever Demo District Generator (CLI Version)
+
+A high-performance Python CLI utility for generating synthetic school district data that is **Clever Schema Compliant**.
 
 This tool is designed for developers and integration engineers who need robust, realistic, and privacy-safe datasets for testing rostering integrations (SFTP/CSV), SIS imports, and application logic.
 
 ## 🚀 Features
 
-* **Pure Python:** No API keys or cloud dependencies required. Runs locally and instantly.
-
-* **Clever Compliant:** Generates CSVs (`schools`, `students`, `teachers`, `sections`, `enrollments`) that match standard rostering schemas, including ISO language codes and standard race categories.
-
-* **Smart Logic:**
-    * **Real Locations:** Maps schools to valid City/Zip combinations based on State (e.g., Austin TX zips vs. NY zips).
-    * **Dynamic Terms:** Automatically calculates School Year start/end dates based on your testing window.
-    * **Demographics:** Configurable distribution of IEP, ELL, FRL, and Disability statuses.
-    * **Gender Alignment:** Ensures student First Names match their Gender marker.
-* **Supplemental Data:** Optional generation of **Granular Attendance** (Section-level or Daily) and **Resources** (textbooks/apps).
+- **Pure Python CLI:** Runs locally in your terminal with a rich, interactive user interface.
+    
+- **Multi-Schema Support:**
+    
+    - **Standard:** Generates standard rostering CSVs (`schools`, `students`, `teachers`, `sections`, `enrollments`).
+        
+    - **AnySchool:** Supports the flat-file `users.csv` and `sections.csv` schema.
+        
+- **Variance & Ranges:** Supports "Min-Max" ranges (e.g., `15-30`) for teachers and students, creating organic, non-uniform school sizes.
+    
+- **Ratio-Based Scheduling:** Logic generates sections based on **Workload Ratios** (e.g., "5 classes per teacher") rather than arbitrary totals, ensuring realistic data shapes regardless of district size.
+    
+- **"Two-Pass" Summer School:** Summer sessions are generated as an overlay (~35% of teachers), ensuring realistic coverage without disrupting core academic term logic.
+    
+- **Privacy First:** All PII is synthetically generated using `Faker`. No real student data is ever used.
+    
 
 ## 🛠️ Installation
 
-1.  **Clone the repository:**
-    ```bash
-    git clone [https://github.com/your-org/demo-district-generator.git](https://github.com/your-org/demo-district-generator.git)
+1. **Clone the repository:**
+    
+    Bash
+    
+    ```
+    git clone https://github.com/your-org/demo-district-generator.git
     cd demo-district-generator
     ```
-
-2.  **Create a Virtual Environment (Recommended):**
-    ```bash
+    
+2. **Create a Virtual Environment (Recommended):**
+    
+    Bash
+    
+    ```
     python3 -m venv venv
     source venv/bin/activate  # On Windows: venv\Scripts\activate
     ```
-
-3.  **Install Dependencies:**
-    ```bash
-    pip install -r requirements.txt
+    
+3. **Install Dependencies:**
+    
+    Bash
+    
     ```
+    pip install pandas faker rich
+    ```
+    
 
 ## ⚡ Usage
 
 Run the main script:
 
-```bash
+Bash
+
+```
 python faker_district.py
 ```
 
-## The "Quick Start" Workflow
+### The Workflow
 
 When you run the script, you will be asked:
 
-"Apply default settings?"
+> **"Apply ALL default settings?"**
 
-**Yes (y)**: Immediately generates data using the configuration defined in the DEFAULTS dictionary at the top of the script. Perfect for rapid regression testing.
+1. **Yes (y):** Immediately generates data using the configuration defined in the `DEFAULTS` dictionary. Perfect for rapid regression testing.
+    
+2. **No (n):** Enters **Interactive Mode**, allowing you to customize:
+    
+    - **Structure:** Number of Districts, Schools.
+        
+    - **Ranges:** Teachers per school (e.g., "20-40") and Students per section.
+        
+    - **Ratios:** How many sections a single teacher leads per term.
+        
+    - **Schema:** Output `Standard`, `AnySchool`, or `Both`.
+        
+    - **Terms:** Academic start year and Term structure (Semesters/Trimesters/Quarters).
+        
+    - **Demographics:** Probability of IEP, FRL, ELL, etc.
+        
 
-**No (n)**: Enters Interactive Mode, allowing you to customize:
+## 📂 Output Structure
 
-* Number of Districts/Schools/Students.
+Data is generated in the `district_data_output/` directory. Depending on your **Schema** selection, the files will be organized into subfolders:
 
-* Academic start year for term data
+Plaintext
 
-* Number of terms per year
-
-* If a summer session should be included
-
-* Probability of demographics (IEP, FRL, etc.).
-
-* Whether to include Attendance or Resource files.
-
-
-### Output Structure
-
-Data is generated in the `district_data_output/` directory. Each district gets its own folder:
-
-```text
-district_data/
+```
+district_data_output/
 └── MapleValley_Data/
-    ├── schools.csv
-    ├── teachers.csv
-    ├── students.csv
-    ├── staff.csv
-    ├── sections.csv
-    ├── enrollments.csv
-    ├── attendance.csv  (Optional)
-    └── resources.csv   (Optional)
+    ├── standard/
+    │   ├── schools.csv
+    │   ├── teachers.csv
+    │   ├── students.csv
+    │   ├── staff.csv
+    │   ├── sections.csv
+    │   └── enrollments.csv
+    └── anyschool/
+        ├── users.csv
+        └── sections.csv
 ```
 
-### Configuration
+## 🧠 Data Logic & Notes
+
+### 1. Ratio & Range Logic
+
+Unlike older generators that required you to calculate "Total Sections," this tool uses a **Workload Ratio**:
+
+- **Teachers:** You define a range (e.g., `15-30`). The script picks a random count for each school.
+    
+- **Sections:** You define the `SECTIONS_PER_TEACHER_TERM` (Default: 5).
+    
+    - _Math:_ If a school has 20 teachers and 2 terms, the script generates `20 * 2 * 5 = 200` sections.
+        
+- **Enrollment:** The script calculates the students needed to fill those sections based on your `STUDENTS_PER_SECTION` range (e.g., `18-32`).
+    
+
+### 2. Dynamic Term Logic
+
+- **Core Terms:** You define the structure (Semesters/Trimesters/Quarters). The script maps realistic dates (e.g., Semesters align with Winter Break).
+    
+- **Summer Overlay:** Summer is no longer treated as a "3rd Semester." It is generated via a **Second Pass**:
+    
+    - **Teachers:** A random sample (~35%) are assigned extra "Summer" sections.
+        
+    - **Students:** A random sample (~30%) are enrolled in these sections.
+        
+
+### 3. AnySchool Transformation
+
+If `AnySchool` or `Both` is selected, the script performs an in-memory transformation:
+
+- Flattens `teachers`, `staff`, and `students` into a single `users.csv`.
+    
+- Converts standard `YYYY-MM-DD` dates to `MM/DD/YYYY`.
+    
+- Joins enrollment data directly into `sections.csv`.
+    
+
+### 4. Configuration
 
 You can permanently adjust the "Quick Start" baseline by editing the `DEFAULTS` dictionary at the top of `faker_district.py`:
-```python
+
+Python
+
+```
 DEFAULTS = {
-    "ID_MODE": "alphanumeric",
-    "NUM_DISTRICTS": 1,
-    "SCHOOLS_PER_DISTRICT": 5,
-    "TEACHERS_PER_SCHOOL": 10,
-    "SECTIONS_PER_SCHOOL": 15,
-    "STUDENTS_PER_SECTION": 20,
+    # Ranges (Strings allow "min-max")
+    "TEACHERS_PER_SCHOOL": "15-30",
+    "STUDENTS_PER_SECTION": "18-32",
     
+    # Workload Ratio
+    "SECTIONS_PER_TEACHER_TERM": 5, 
+
     # Term Configuration
     "SCHOOL_START_YEAR": "2025",
-    "NUM_TERMS": 2,               # 2=Semester, 3=Trimester, 4=Quarter
+    "NUM_TERMS": 2, 
     "INCLUDE_SUMMER": True,
     
-    # Demographics
-    "PROB_FRL": 0.45, "PROB_IEP": 0.12, "PROB_ELL": 0.10,
-    "PROB_504": 0.05, "PROB_GIFTED": 0.08, "PROB_DISABILITY": 0.11,
+    # Output Control
+    "OUTPUT_SCHEMA": "standard", # standard, anyschool, or both
     
-    # Toggles
-    "DO_EXTENSIONS": False,
-    "DO_RESOURCES": False,
-    "DO_ATTENDANCE": False,
-    
-    # Attendance Context (Still needed if attendance is on)
-    "ATT_START_DATE": "2025-09-01", 
-    "ATT_DAYS": 5,
-    "ATT_MODE": "Section" 
+    # ...
 }
 ```
-
-### Data Logic & Notes
-
-#### Dynamic Term Logic:
-
-* **Configuration**: You define the structure (Semesters/Trimesters/Quarters) and the SCHOOL_START_YEAR (e.g., 2025).
-
-* **Smart Dates**: The script automatically generates realistic date ranges (e.g., Semesters align with Winter Break).
-
-* **Load Balancing**: Sections are distributed evenly across terms for each teacher. If a teacher has multiple sections, they will be split between Fall, Spring, and (optionally) Summer to create a realistic schedule. The same logic will apply depending on how many terms you specify in the inital input config when exceuting. 
-
-    * The default ratio is set for semesters: 2 sections for each term + one summer section for each teacher.
-    
-    * General rule of thumb: If adding summer terms, add additional sections per school at a ratio of 1:1 for sections:teachers per school.    
-
-    * **Recommendation**: Set SECTIONS_PER_SCHOOL to Teachers * Number of desired terms. 
-    
-    * If you want Summer data, you need to budget "extra" sections in your configuration to push the rotation far enough to hit that Summer slot.
-    
-    * **Ex**: If using Quarters (4 terms) and 15 teachers per school, set this to at least 60 (4 per teacher, 1 per term).
-
-#### Attendance Modes:
-
-* **Daily**: One record per student per day.
-
-* **Section**: One record per student per section per day (High volume).
-
-
-**Privacy**: All Personally Identifiable Information (PII) is synthetically generated using Faker. No real student data is ever used.
