@@ -1,3 +1,5 @@
-faker>=24.0.0
-pandas>=2.2.0
-rich>=13.7.0
+faker
+pandas
+rich
+openpyxl
+streamlit
