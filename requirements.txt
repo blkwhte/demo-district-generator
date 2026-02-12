@@ -1,5 +1,6 @@
+streamlit
 faker
 pandas
 rich
 openpyxl
-streamlit
+altair<5
