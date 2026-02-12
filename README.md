@@ -1,4 +1,4 @@
-# Clever Demo District Generator (containerized)
+# Clever Demo District Generator (hosted)
 
 A high-performance Python utility for generating synthetic school district data that is **Clever Schema Compliant**.
 
@@ -8,13 +8,11 @@ This tool is designed for developers and integration engineers who need robust, 
 
 - **Web Interface (Streamlit):** No more CLI prompts. Configure and generate data via a clean, browser-based dashboard.
     
-- **Docker Ready:** Fully containerized for easy deployment on AWS, Azure, or local machines without environment conflicts.
-    
 - **Multi-Schema Support:**
     
     - **Standard:** Standard rostering CSVs (`schools`, `students`, `teachers`, `sections`, `enrollments`).
         
-    - **AnySchool:** Supports the flat-file `users.csv` and `sections.csv` schema.
+    - **AnySchool:** Supports the flat-file `users.csv` and `sections.csv` schema for CSV uploads for Clever AnySchool.
         
 - **Smart Logic:**
     
@@ -23,6 +21,18 @@ This tool is designed for developers and integration engineers who need robust, 
     - **Ratio-Based Scheduling:** Define workload by "Sections per Teacher" rather than arbitrary totals.
         
     - **"Two-Pass" Summer School:** Summer sessions are generated as an overlay, ensuring realistic coverage (~35% of teachers) without messing up core term logic.
+
+    - **"Streaming Generation" approach to resolve memory limitations:** This keeps your memory usage constant (only ~1 school's worth of RAM) regardless of whether you generate 5 schools or 5,000. Instead of waiting until the end to save, we will:
+
+        - Initialize empty CSV files with headers first.
+
+        - Generate one school at a time.
+
+        - Append that school's data to the CSVs immediately.
+
+        - Delete the data from memory.
+
+        - Repeat.
         
 - **Privacy First:** All PII is synthetically generated using `Faker`. No real student data is ever used.
     

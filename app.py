@@ -120,6 +120,86 @@ def generate_household_contacts(student_last_name, email_domain):
     else: contacts.append(make_contact("Grandmother", "Guardian"))
     return contacts
 
+# --- FILE STREAMING HELPERS ---
+def init_files(out_dir, schema):
+    """Creates empty CSVs with headers."""
+    # Define Headers
+    HEADERS = {
+        "schools": ["School_id", "School_name", "School_number", "Low_grade", "High_grade", "Principal", "Principal_email", "School_address", "School_city", "School_state", "School_zip", "School_phone"],
+        "teachers": ["School_id", "Teacher_id", "Teacher_number", "State_teacher_id", "Teacher_email", "Username", "First_name", "Last_name", "Title"],
+        "staff": ["School_id", "Staff_id", "Staff_email", "First_name", "Last_name", "Department", "Title"],
+        "students": ["School_id", "Student_id", "Student_number", "State_id", "Last_name", "First_name", "Grade", "Gender", "DOB", "Email_address", "Username", "Race", "Home_language", "IEP_status", "FRL_status", "ELL_status", "Section_504_status", "Gifted_status", "Disability_status", "Disability_type", "Disability_code", "ext.locker_number", "ext.bus_route", "Contact_relationship", "Contact_type", "Contact_name", "Contact_phone", "Contact_phone_type", "Contact_email", "Contact_sis_id"],
+        "sections": ["School_id", "Section_id", "Teacher_id", "Teacher_2_id", "Name", "Grade", "Subject", "Term_name", "Term_start", "Term_end"],
+        "enrollments": ["School_id", "Section_id", "Student_id"],
+        "users": ["School_name", "User_type", "User_id", "First_name", "Last_name", "Email", "Username", "Grade", "DOB"],
+        "anyschool_sections": ["School_name", "Section_id", "User_id", "Teacher_id", "School_number", "Subject", "Period", "Section_name"]
+    }
+
+    paths = {}
+    if schema in ["standard", "both"]:
+        std_dir = os.path.join(out_dir, "standard")
+        os.makedirs(std_dir, exist_ok=True)
+        for k in ["schools", "teachers", "staff", "students", "sections", "enrollments"]:
+            p = os.path.join(std_dir, f"{k}.csv")
+            pd.DataFrame(columns=HEADERS[k]).to_csv(p, index=False)
+            paths[f"std_{k}"] = p
+
+    if schema in ["anyschool", "both"]:
+        as_dir = os.path.join(out_dir, "anyschool")
+        os.makedirs(as_dir, exist_ok=True)
+        # Note: AnySchool uses 'sections.csv' but we map it to 'anyschool_sections' key for clarity
+        p_users = os.path.join(as_dir, "users.csv")
+        p_sec = os.path.join(as_dir, "sections.csv")
+        pd.DataFrame(columns=HEADERS["users"]).to_csv(p_users, index=False)
+        pd.DataFrame(columns=HEADERS["anyschool_sections"]).to_csv(p_sec, index=False)
+        paths["as_users"] = p_users
+        paths["as_sections"] = p_sec
+        
+    return paths
+
+def append_data(data, filepath):
+    """Appends a list of dicts to an existing CSV."""
+    if not data: return
+    df = pd.DataFrame(data)
+    # Reorder/Fill columns to match header if necessary, but usually safe if dict keys match
+    df.to_csv(filepath, mode='a', header=False, index=False)
+
+def transform_to_anyschool(students, teachers, staff, sections, enrollments, schools):
+    # This is slightly tricky in streaming mode because AnySchool needs joins.
+    # We will do a mini-transform for the CURRENT CHUNK.
+    # Note: This means 'users.csv' will have duplicates if we aren't careful, 
+    # BUT since we are processing distinct schools, IDs shouldn't overlap between chunks.
+    # Exception: Students with multiple contacts appear multiple times in standard 'students.csv'.
+    # For AnySchool 'users.csv', we must deduplicate the student list within this chunk.
+    
+    school_map = {s['School_id']: {'name': s['School_name'], 'number': s['School_number']} for s in schools}
+    def fmt_date(d):
+        try: return datetime.datetime.strptime(d, "%Y-%m-%d").strftime("%m/%d/%Y")
+        except: return d
+    
+    users_out, sections_out = [], []
+    seen_students = set()
+    
+    # Dedupe students for users.csv
+    for s in students:
+        if s['Student_id'] in seen_students: continue
+        seen_students.add(s['Student_id'])
+        users_out.append({"School_name": school_map[s['School_id']]['name'], "User_type": "student", "User_id": s['Student_id'], "First_name": s['First_name'], "Last_name": s['Last_name'], "Email": s['Email_address'], "Username": s.get('Username', ''), "Grade": s['Grade'], "DOB": fmt_date(s['DOB'])})
+    
+    for t in teachers:
+        users_out.append({"School_name": school_map[t['School_id']]['name'], "User_type": "teacher", "User_id": t['Teacher_id'], "First_name": t['First_name'], "Last_name": t['Last_name'], "Email": t['Teacher_email'], "Username": t.get('Username', ''), "Grade": "", "DOB": ""})
+    
+    for st in staff:
+        users_out.append({"School_name": school_map[st['School_id']]['name'], "User_type": "staff", "User_id": st['Staff_id'], "First_name": st['First_name'], "Last_name": st['Last_name'], "Email": st['Staff_email'], "Username": st.get('Staff_email', '').split('@')[0], "Grade": "", "DOB": ""})
+    
+    sec_lookup = {x['Section_id']: x for x in sections}
+    for e in enrollments:
+        sd = sec_lookup.get(e['Section_id'])
+        if not sd: continue
+        sections_out.append({"School_name": school_map[e['School_id']]['name'], "Section_id": e['Section_id'], "User_id": e['Student_id'], "Teacher_id": sd['Teacher_id'], "School_number": school_map[e['School_id']]['number'], "Subject": sd['Subject'], "Period": "1", "Section_name": sd['Name']})
+        
+    return users_out, sections_out
+
 # ==========================================
 # 2. STREAMLIT UI
 # ==========================================
@@ -131,7 +211,6 @@ st.markdown("Generate realistic, privacy-safe school datasets with varied enroll
 # --- SIDEBAR CONFIG ---
 with st.sidebar:
     st.header("Configuration")
-    
     st.subheader("Structure")
     num_districts = st.number_input("Number of Districts", min_value=1, value=DEFAULTS["NUM_DISTRICTS"])
     schools_per_district = st.number_input("Schools per District", min_value=1, value=DEFAULTS["SCHOOLS_PER_DISTRICT"])
@@ -139,7 +218,8 @@ with st.sidebar:
     st.subheader("Format")
     id_mode = st.selectbox("ID Mode", ["alphanumeric", "sequential"], index=0)
     output_schema = st.selectbox("Schema", ["standard", "anyschool", "both"], index=0)
-    output_format = st.selectbox("File Format", ["csv", "json", "both"], index=0)
+    # Removed JSON support for streaming (complex to stream JSON properly), enforced CSV for large scale
+    st.caption("Note: Large scale generation forces CSV format for performance.") 
 
 # --- MAIN FORM ---
 col1, col2 = st.columns(2)
@@ -178,18 +258,16 @@ with st.expander("Advanced Settings"):
         att_days = st.number_input("Attendance Days", value=DEFAULTS["ATT_DAYS"])
 
 # ==========================================
-# 3. GENERATION LOGIC
+# 3. GENERATION LOGIC (STREAMING)
 # ==========================================
 if st.button("Generate Data", type="primary"):
     
     base_output_dir = 'district_data_output'
     if os.path.exists(base_output_dir):
-        shutil.rmtree(base_output_dir) # Clean previous run
+        shutil.rmtree(base_output_dir)
     os.makedirs(base_output_dir, exist_ok=True)
 
-    # Re-shuffle generic names so every run is fresh
     random.shuffle(GENERIC_DISTRICT_NAMES)
-    
     CORE_TERMS = generate_term_schedule(start_year, num_terms)
     
     progress_bar = st.progress(0)
@@ -199,21 +277,23 @@ if st.button("Generate Data", type="primary"):
         dist_name = GENERIC_DISTRICT_NAMES[i % len(GENERIC_DISTRICT_NAMES)]
         status_text.text(f"Generating {dist_name} ({i+1}/{num_districts})...")
         
-        # Domain Logic
+        # 1. SETUP DISTRICT FOLDER & FILES
+        dist_dir = os.path.join(base_output_dir, f"{dist_name}_Data")
+        os.makedirs(dist_dir, exist_ok=True)
+        file_paths = init_files(dist_dir, output_schema) # Initialize CSVs with headers
+
+        # District Config
         current_domain = email_domain if email_domain else f"{dist_name.lower()}.k12.edu"
-        
-        # State Logic
         state_key = STATE_KEYS[i % len(STATE_KEYS)]
         state_name, state_abbr = STATE_MAPPINGS[state_key]
         base_id_seq = (i + 1) * 100000 
-        district_prefix = str(10 + i)
-
-        # Containers
-        schools_data, teachers_data, staff_data = [], [], []
-        students_data, sections_data, enrollments_data = [], [], []
-
-        # --- SCHOOL LOOP ---
+        
+        # --- SCHOOL LOOP (CHUNKED) ---
         for s_idx in range(schools_per_district):
+            # Clear chunk containers at start of loop
+            chunk_schools, chunk_teachers, chunk_staff = [], [], []
+            chunk_students, chunk_sections, chunk_enrollments = [], [], []
+
             if id_mode == 'alphanumeric': school_id = get_hex_id(6)
             else: school_id = get_sequential_id(base_id_seq, s_idx * 10000)
             
@@ -227,7 +307,7 @@ if st.button("Generate Data", type="primary"):
             valid_locs = REAL_LOCATIONS.get(state_abbr, [("City", "000")])
             city, zip_pre = random.choice(valid_locs)
             
-            schools_data.append({
+            chunk_schools.append({
                 "School_id": school_id, "School_name": f"{fake.last_name()} {school_type}",
                 "School_number": school_code, "Low_grade": low, "High_grade": high,
                 "Principal": fake.name(), "Principal_email": f"principal.{school_id}@{current_domain}",
@@ -241,7 +321,7 @@ if st.button("Generate Data", type="primary"):
                 t_id = get_hex_id(7) if id_mode == 'alphanumeric' else get_sequential_id(base_id_seq, (s_idx * 1000) + t_idx)
                 f, l = fake.first_name(), fake.last_name()
                 uname, email = generate_email_username(f, l, current_domain, username_fmt)
-                teachers_data.append({
+                chunk_teachers.append({
                     "School_id": school_id, "Teacher_id": t_id, "Teacher_number": t_id[:8], "State_teacher_id": f"{state_abbr}-{t_id[:8]}",
                     "Teacher_email": email, "Username": uname, "First_name": f, "Last_name": l, "Title": "Teacher"
                 })
@@ -252,7 +332,7 @@ if st.button("Generate Data", type="primary"):
                 st_id = get_hex_id(7) if id_mode == 'alphanumeric' else get_sequential_id(base_id_seq, 90000 + (s_idx*10) + st_idx)
                 f, l = fake.first_name(), fake.last_name()
                 uname, email = generate_email_username(f, l, current_domain, username_fmt)
-                staff_data.append({
+                chunk_staff.append({
                     "School_id": school_id, "Staff_id": st_id, "Staff_email": email, "First_name": f, "Last_name": l, "Department": "Admin", "Title": "Staff"
                 })
 
@@ -266,7 +346,7 @@ if st.button("Generate Data", type="primary"):
                         sec_id = get_hex_id(8) if id_mode == 'alphanumeric' else f"SEC-{uuid.uuid4().hex[:8]}"
                         s_grade = random.choice(grade_list)
                         s_subj = random.choice(['Math', 'Science', 'ELA', 'History', 'Art', 'PE'])
-                        sections_data.append({
+                        chunk_sections.append({
                             "School_id": school_id, "Section_id": sec_id, "Teacher_id": t_id, "Teacher_2_id": "",
                             "Name": f"{s_grade} - {s_subj}", "Grade": s_grade, "Subject": s_subj,
                             "Term_name": term["Term_name"], "Term_start": term["Term_start"], "Term_end": term["Term_end"]
@@ -284,7 +364,6 @@ if st.button("Generate Data", type="primary"):
                 uname, email = generate_email_username(f, l, current_domain, username_fmt)
                 s_grade = random.choice(grade_list)
                 
-                # Demographics
                 has_disability = "Y" if random.random() < p_disability else "N"
                 dis_code, dis_type = ("", "")
                 if has_disability == "Y":
@@ -310,11 +389,11 @@ if st.button("Generate Data", type="primary"):
                     for c in hh:
                         r = stu_obj.copy()
                         r.update(c)
-                        students_data.append(r)
+                        chunk_students.append(r)
                 else:
-                    students_data.append(stu_obj)
+                    chunk_students.append(stu_obj)
 
-            # --- CORE ENROLLMENT ---
+            # --- ENROLLMENT ---
             students_by_grade = {g: [s for s in school_student_objs if s['Grade'] == g] for g in grade_list}
             for sec in school_section_ids:
                 avail = students_by_grade.get(sec['grade'], [])
@@ -322,7 +401,7 @@ if st.button("Generate Data", type="primary"):
                 count = parse_count(students_input)
                 selected = random.sample(avail, k=min(count, len(avail)))
                 for s in selected:
-                    enrollments_data.append({"School_id": school_id, "Section_id": sec['id'], "Student_id": s['Student_id']})
+                    chunk_enrollments.append({"School_id": school_id, "Section_id": sec['id'], "Student_id": s['Student_id']})
 
             # --- SUMMER ---
             if include_summer:
@@ -335,7 +414,7 @@ if st.button("Generate Data", type="primary"):
                         sec_id = f"SUM-{uuid.uuid4().hex[:6]}"
                         s_grade = random.choice(grade_list)
                         s_subj = "Summer " + random.choice(['Math', 'Reading', 'Credit Recovery'])
-                        sections_data.append({
+                        chunk_sections.append({
                             "School_id": school_id, "Section_id": sec_id, "Teacher_id": st_id, "Teacher_2_id": "",
                             "Name": f"{s_grade} - {s_subj}", "Grade": s_grade, "Subject": s_subj,
                             "Term_name": summer_term["Term_name"], "Term_start": summer_term["Term_start"], "Term_end": summer_term["Term_end"]
@@ -351,63 +430,35 @@ if st.button("Generate Data", type="primary"):
                     count = random.randint(10, 20)
                     selected = random.sample(avail, k=min(count, len(avail)))
                     for s in selected:
-                        enrollments_data.append({"School_id": school_id, "Section_id": sec['id'], "Student_id": s['Student_id']})
+                        chunk_enrollments.append({"School_id": school_id, "Section_id": sec['id'], "Student_id": s['Student_id']})
 
-        # --- ADMIN ---
-        if schools_data:
-            admin_id = get_hex_id(7) if id_mode == 'alphanumeric' else str(base_id_seq + 99999)
-            staff_data.insert(0, { "School_id": schools_data[0]['School_id'], "Staff_id": admin_id, "Staff_email": f"admin@{current_domain}", "First_name": "System", "Last_name": "Admin", "Department": "Central", "Title": "Admin" })
+            # --- ADMIN (One per district, so just do it on first school) ---
+            if s_idx == 0:
+                 admin_id = get_hex_id(7) if id_mode == 'alphanumeric' else str(base_id_seq + 99999)
+                 chunk_staff.insert(0, { "School_id": school_id, "Staff_id": admin_id, "Staff_email": f"admin@{current_domain}", "First_name": "System", "Last_name": "Admin", "Department": "Central", "Title": "Admin" })
 
-        # --- SAVING & TRANSFORM ---
-        def transform_to_anyschool(students, teachers, staff, sections, enrollments, schools):
-            school_map = {s['School_id']: {'name': s['School_name'], 'number': s['School_number']} for s in schools}
-            def fmt_date(d):
-                try: return datetime.datetime.strptime(d, "%Y-%m-%d").strftime("%m/%d/%Y")
-                except: return d
-            users_out, sections_out = [], []
-            seen_students = set()
-            for s in students:
-                if s['Student_id'] in seen_students: continue
-                seen_students.add(s['Student_id'])
-                users_out.append({"School_name": school_map[s['School_id']]['name'], "User_type": "student", "User_id": s['Student_id'], "First_name": s['First_name'], "Last_name": s['Last_name'], "Email": s['Email_address'], "Username": s.get('Username', ''), "Grade": s['Grade'], "DOB": fmt_date(s['DOB'])})
-            for t in teachers:
-                users_out.append({"School_name": school_map[t['School_id']]['name'], "User_type": "teacher", "User_id": t['Teacher_id'], "First_name": t['First_name'], "Last_name": t['Last_name'], "Email": t['Teacher_email'], "Username": t.get('Username', ''), "Grade": "", "DOB": ""})
-            for st in staff:
-                users_out.append({"School_name": school_map[st['School_id']]['name'], "User_type": "staff", "User_id": st['Staff_id'], "First_name": st['First_name'], "Last_name": st['Last_name'], "Email": st['Staff_email'], "Username": st.get('Staff_email', '').split('@')[0], "Grade": "", "DOB": ""})
-            sec_lookup = {x['Section_id']: x for x in sections}
-            for e in enrollments:
-                sd = sec_lookup.get(e['Section_id'])
-                if not sd: continue
-                sections_out.append({"School_name": school_map[e['School_id']]['name'], "Section_id": e['Section_id'], "User_id": e['Student_id'], "Teacher_id": sd['Teacher_id'], "School_number": school_map[e['School_id']]['number'], "Subject": sd['Subject'], "Period": "1", "Section_name": sd['Name']})
-            return users_out, sections_out
+            # --- STREAM TO DISK NOW (FLUSH MEMORY) ---
+            if "std_schools" in file_paths:
+                append_data(chunk_schools, file_paths["std_schools"])
+                append_data(chunk_teachers, file_paths["std_teachers"])
+                append_data(chunk_staff, file_paths["std_staff"])
+                append_data(chunk_students, file_paths["std_students"])
+                append_data(chunk_sections, file_paths["std_sections"])
+                append_data(chunk_enrollments, file_paths["std_enrollments"])
 
-        def save_data(data, fname, out_dir, fmt):
-            if not data: return
-            df = pd.DataFrame(data)
-            if fmt in ['csv', 'both']: df.to_csv(os.path.join(out_dir, f"{fname}.csv"), index=False)
-            if fmt in ['json', 'both']: df.to_json(os.path.join(out_dir, f"{fname}.json"), orient='records', indent=4)
+            if "as_users" in file_paths:
+                # Transform this chunk
+                u_chunk, s_chunk = transform_to_anyschool(chunk_students, chunk_teachers, chunk_staff, chunk_sections, chunk_enrollments, chunk_schools)
+                append_data(u_chunk, file_paths["as_users"])
+                append_data(s_chunk, file_paths["as_sections"])
 
-        out_dir = os.path.join(base_output_dir, f"{dist_name}_Data")
-        os.makedirs(out_dir, exist_ok=True)
+            # Explicitly clear large lists to force memory release (Python GC is usually good, but this helps)
+            del chunk_students, chunk_enrollments, chunk_sections
         
-        if output_schema in ["standard", "both"]:
-            d = os.path.join(out_dir, "standard") if output_schema == "both" else out_dir
-            os.makedirs(d, exist_ok=True)
-            for k, v in [("schools", schools_data), ("teachers", teachers_data), ("staff", staff_data), ("students", students_data), ("sections", sections_data), ("enrollments", enrollments_data)]:
-                save_data(v, k, d, output_format)
-                
-        if output_schema in ["anyschool", "both"]:
-            d = os.path.join(out_dir, "anyschool") if output_schema == "both" else out_dir
-            os.makedirs(d, exist_ok=True)
-            u_csv, s_csv = transform_to_anyschool(students_data, teachers_data, staff_data, sections_data, enrollments_data, schools_data)
-            save_data(u_csv, "users", d, output_format)
-            save_data(s_csv, "sections", d, output_format)
-            
         progress_bar.progress((i + 1) / num_districts)
 
     status_text.success("Generation Complete! Creating Archive...")
     
-    # Create ZIP
     shutil.make_archive(base_output_dir, 'zip', base_output_dir)
     
     with open(f"{base_output_dir}.zip", "rb") as fp:
