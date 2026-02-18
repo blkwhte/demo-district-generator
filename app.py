@@ -165,26 +165,42 @@ def append_data(data, filepath):
     df.to_csv(filepath, mode='a', header=False, index=False)
 
 def transform_to_anyschool(students, teachers, staff, sections, enrollments, schools):
-    # This is slightly tricky in streaming mode because AnySchool needs joins.
-    # We will do a mini-transform for the CURRENT CHUNK.
-    # Note: This means 'users.csv' will have duplicates if we aren't careful, 
-    # BUT since we are processing distinct schools, IDs shouldn't overlap between chunks.
-    # Exception: Students with multiple contacts appear multiple times in standard 'students.csv'.
-    # For AnySchool 'users.csv', we must deduplicate the student list within this chunk.
-    
     school_map = {s['School_id']: {'name': s['School_name'], 'number': s['School_number']} for s in schools}
+    
     def fmt_date(d):
         try: return datetime.datetime.strptime(d, "%Y-%m-%d").strftime("%m/%d/%Y")
         except: return d
     
+    # --- NEW: CLEVER ANYSCHOOL SCHEMA MAPPINGS ---
+    GRADE_MAP = {
+        "KG": "Kindergarten", 
+        "PK": "PreKindergarten"
+    }
+    
+    SUBJECT_MAP = {
+        "Math": "math", 
+        "Science": "science", 
+        "ELA": "english/language arts",
+        "History": "social studies", 
+        "Art": "arts and music", 
+        "PE": "pe and health",
+        "Summer Math": "math", 
+        "Summer Reading": "english/language arts",
+        "Summer Credit Recovery": "other"
+    }
+
     users_out, sections_out = [], []
     seen_students = set()
     
-    # Dedupe students for users.csv
+    # Users (Deduplicating students on the fly)
     for s in students:
         if s['Student_id'] in seen_students: continue
         seen_students.add(s['Student_id'])
-        users_out.append({"School_name": school_map[s['School_id']]['name'], "User_type": "student", "User_id": s['Student_id'], "First_name": s['First_name'], "Last_name": s['Last_name'], "Email": s['Email_address'], "Username": s.get('Username', ''), "Grade": s['Grade'], "DOB": fmt_date(s['DOB'])})
+        
+        # Apply the grade mapping (fallback to original grade number if not KG/PK)
+        mapped_grade = GRADE_MAP.get(str(s['Grade']), str(s['Grade']))
+        
+        users_out.append({"School_name": school_map[s['School_id']]['name'], "User_type": "student", "User_id": s['Student_id'], "First_name": s['First_name'], "Last_name": s['Last_name'], "Email": s['Email_address'], "Username": s.get('Username', ''), "Grade": mapped_grade, "DOB": fmt_date(s['DOB'])})
     
     for t in teachers:
         users_out.append({"School_name": school_map[t['School_id']]['name'], "User_type": "teacher", "User_id": t['Teacher_id'], "First_name": t['First_name'], "Last_name": t['Last_name'], "Email": t['Teacher_email'], "Username": t.get('Username', ''), "Grade": "", "DOB": ""})
@@ -192,11 +208,16 @@ def transform_to_anyschool(students, teachers, staff, sections, enrollments, sch
     for st in staff:
         users_out.append({"School_name": school_map[st['School_id']]['name'], "User_type": "staff", "User_id": st['Staff_id'], "First_name": st['First_name'], "Last_name": st['Last_name'], "Email": st['Staff_email'], "Username": st.get('Staff_email', '').split('@')[0], "Grade": "", "DOB": ""})
     
+    # Sections (Flattened)
     sec_lookup = {x['Section_id']: x for x in sections}
     for e in enrollments:
         sd = sec_lookup.get(e['Section_id'])
         if not sd: continue
-        sections_out.append({"School_name": school_map[e['School_id']]['name'], "Section_id": e['Section_id'], "User_id": e['Student_id'], "Teacher_id": sd['Teacher_id'], "School_number": school_map[e['School_id']]['number'], "Subject": sd['Subject'], "Period": "1", "Section_name": sd['Name']})
+        
+        # Apply the subject mapping (fallback to 'other' if somehow missing)
+        mapped_subject = SUBJECT_MAP.get(sd['Subject'], "other")
+        
+        sections_out.append({"School_name": school_map[e['School_id']]['name'], "Section_id": e['Section_id'], "User_id": e['Student_id'], "Teacher_id": sd['Teacher_id'], "School_number": school_map[e['School_id']]['number'], "Subject": mapped_subject, "Period": "1", "Section_name": sd['Name']})
         
     return users_out, sections_out
 
