@@ -93,9 +93,9 @@ def generate_summer_term(anchor_year_str):
     y_end = int(anchor_year_str) + 1
     return {"Term_name": f"Summer {y_end}", "Term_start": f"{y_end}-06-01", "Term_end": f"{y_end}-07-30"}
 
-def generate_household_contacts(student_last_name, email_domain):
+def generate_household_contacts(student_last_name):
     f_name = fake.first_name_female()
-    return [{ "Contact_relationship": "Mother", "Contact_type": "Parent/Guardian", "Contact_name": f"{f_name} {student_last_name}", "Contact_phone": clean_phone(), "Contact_phone_type": "Cell", "Contact_email": f"{f_name}.{student_last_name}@{email_domain}".lower(), "Contact_sis_id": f"cont-{uuid.uuid4().hex[:8]}" }]
+    return [{ "Contact_relationship": "Mother", "Contact_type": "Parent/Guardian", "Contact_name": f"{f_name} {student_last_name}", "Contact_phone": clean_phone(), "Contact_phone_type": "Cell", "Contact_email": f"{f_name}.{student_last_name}@example.com".lower(), "Contact_sis_id": f"cont-{uuid.uuid4().hex[:8]}" }]
 
 # --- FILE STREAMING HELPERS (With AnySchool Fixes) ---
 def init_files(out_dir, schema):
@@ -104,7 +104,7 @@ def init_files(out_dir, schema):
         "teachers": ["School_id", "Teacher_id", "Teacher_number", "State_teacher_id", "Teacher_email", "Username", "First_name", "Last_name", "Title"],
         "staff": ["School_id", "Staff_id", "Staff_email", "First_name", "Last_name", "Department", "Title"],
         "students": ["School_id", "Student_id", "Student_number", "State_id", "Last_name", "First_name", "Grade", "Gender", "DOB", "Student_Email", "Username", "Race", "Home_language", "IEP_status", "FRL_status", "ELL_status", "Section_504_status", "Gifted_status", "Disability_status", "Disability_type", "Disability_code", "ext.locker_number", "ext.bus_route", "Contact_relationship", "Contact_type", "Contact_name", "Contact_phone", "Contact_phone_type", "Contact_email", "Contact_sis_id"],
-        "sections": ["School_id", "Section_id", "Teacher_id", "Teacher_2_id", "Name", "Grade", "Subject", "Term_name", "Term_start", "Term_end"],
+        "sections": ["School_id", "Section_id", "Teacher_id", "Teacher_2_id", "Name", "Grade", "Subject", "Term_name", "Term_start", "Term_end", "Period"],
         "enrollments": ["School_id", "Section_id", "Student_id"],
         "users": ["School_name", "User_type", "User_id", "First_name", "Last_name", "Email", "Username", "Grade", "DOB"],
         "anyschool_sections": ["School_name", "Section_id", "User_id", "Teacher_id", "School_number", "Subject", "Period", "Section_name"]
@@ -156,7 +156,7 @@ def transform_to_anyschool(students, teachers, staff, sections, enrollments, sch
         sd = sec_lookup.get(e['Section_id'])
         if not sd: continue
         mapped_subject = SUBJECT_MAP.get(sd['Subject'], "other")
-        sections_out.append({"School_name": school_map[e['School_id']]['name'], "Section_id": e['Section_id'], "User_id": e['Student_id'], "Teacher_id": sd['Teacher_id'], "School_number": school_map[e['School_id']]['number'], "Subject": mapped_subject, "Period": "1", "Section_name": sd['Name']})
+        sections_out.append({"School_name": school_map[e['School_id']]['name'], "Section_id": e['Section_id'], "User_id": e['Student_id'], "Teacher_id": sd['Teacher_id'], "School_number": school_map[e['School_id']]['number'], "Subject": mapped_subject, "Period": sd.get('Period', "1"), "Section_name": sd['Name']})
         
     return users_out, sections_out
 
@@ -206,10 +206,10 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
 
             for t_id in school_teacher_ids:
                 for term in CORE_TERMS:
-                    for _ in range(config["SECTIONS_PER_TEACHER_TERM"]):
+                    for period_idx in range(config["SECTIONS_PER_TEACHER_TERM"]):
                         sec_id = get_hex_id(8) if config["ID_MODE"] == 'alphanumeric' else f"SEC-{uuid.uuid4().hex[:8]}"
                         s_grade, s_subj = random.choice(grade_list), random.choice(['Math', 'Science', 'ELA', 'History', 'Art', 'PE'])
-                        chunk_sections.append({"School_id": school_id, "Section_id": sec_id, "Teacher_id": t_id, "Teacher_2_id": "", "Name": f"{s_grade} - {s_subj}", "Grade": s_grade, "Subject": s_subj, "Term_name": term["Term_name"], "Term_start": term["Term_start"], "Term_end": term["Term_end"]})
+                        chunk_sections.append({"School_id": school_id, "Section_id": sec_id, "Teacher_id": t_id, "Teacher_2_id": "", "Name": f"{s_grade} - {s_subj}", "Grade": s_grade, "Subject": s_subj, "Term_name": term["Term_name"], "Term_start": term["Term_start"], "Term_end": term["Term_end"], "Period": str(period_idx + 1)})
                         school_section_ids.append({"id": sec_id, "grade": s_grade})
 
             avg_sec_size = parse_count(config["STUDENTS_PER_SECTION"])
@@ -229,7 +229,7 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
                 school_student_objs.append(stu_obj)
                 
                 if config["DO_CONTACTS"]:
-                    for c in generate_household_contacts(l, current_domain):
+                    for c in generate_household_contacts(l):
                         r = stu_obj.copy()
                         r.update(c)
                         chunk_students.append(r)
