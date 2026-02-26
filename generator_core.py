@@ -98,8 +98,41 @@ def generate_summer_term(anchor_year_str):
     return {"Term_name": f"Summer {y_end}", "Term_start": f"{y_end}-06-01", "Term_end": f"{y_end}-07-30"}
 
 def generate_household_contacts(student_last_name):
-    f_name = fake.first_name_female()
-    return [{ "Contact_relationship": "Mother", "Contact_type": "Parent/Guardian", "Contact_name": f"{f_name} {student_last_name}", "Contact_phone": clean_phone(), "Contact_phone_type": "Cell", "Contact_email": f"{f_name}.{student_last_name}@example.com".lower(), "Contact_sis_id": f"cont-{uuid.uuid4().hex[:8]}" }]
+    # Define realistic household structures and their relative probabilities
+    # Format: (Relationship, Gender_for_Name, Contact_Type)
+    rel_options = [
+        ("Mother", "female", "Parent/Guardian"),
+        ("Father", "male", "Parent/Guardian"),
+        ("Grandmother", "female", "Emergency"),
+        ("Grandfather", "male", "Emergency"),
+        ("Aunt", "female", "Emergency"),
+        ("Uncle", "male", "Emergency"),
+        ("Guardian", "neutral", "Parent/Guardian")
+    ]
+    # Weights heavily favor parents, but include a healthy mix of other relatives/guardians
+    weights = [40, 40, 5, 5, 3, 3, 4] 
+    
+    # Select a relationship based on the weights
+    choice = random.choices(rel_options, weights=weights, k=1)[0]
+    relationship, gender, contact_type = choice
+    
+    # Generate the appropriate first name based on the relationship
+    if gender == "female":
+        f_name = fake.first_name_female()
+    elif gender == "male":
+        f_name = fake.first_name_male()
+    else:
+        f_name = fake.first_name() # Neutral/Any
+        
+    return [{ 
+        "Contact_relationship": relationship, 
+        "Contact_type": contact_type, 
+        "Contact_name": f"{f_name} {student_last_name}", 
+        "Contact_phone": clean_phone(), 
+        "Contact_phone_type": "Cell", 
+        "Contact_email": f"{f_name}.{student_last_name}@example.com".lower(), 
+        "Contact_sis_id": f"cont-{uuid.uuid4().hex[:8]}" 
+    }]
 
 # --- FILE STREAMING HELPERS (With AnySchool Fixes) ---
 def init_files(out_dir, schema):
@@ -253,6 +286,8 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
                     "Contact_sis_id": ""
                 }
                 
+                school_student_objs.append(stu_obj)
+
                 if config["DO_CONTACTS"]:
                     for c in generate_household_contacts(l):
                         r = stu_obj.copy()
