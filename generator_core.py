@@ -66,9 +66,13 @@ def parse_count(val_input):
     if "-" in val_str:
         try:
             low, high = map(int, val_str.split("-"))
-            return random.randint(low, high)
+            # max(1, ...) ensures the lowest possible return is 1
+            return max(1, random.randint(low, high))
         except: return 10
-    else: return int(val_str)
+    else: 
+        try:
+            return max(1, int(val_str))
+        except: return 10
 
 def generate_dob(grade):
     current_year = datetime.date.today().year
@@ -224,9 +228,30 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
                 has_disability = "Y" if random.random() < config["PROB_DISABILITY"] else "N"
                 dis_code, dis_type = (random.choice(DISABILITY_CODES), DISABILITY_MAP[random.choice(DISABILITY_CODES)]) if has_disability == "Y" else ("", "")
                 
-                stu_obj = {"School_id": school_id, "Student_id": stu_id, "Student_number": stu_id[:8], "State_id": f"{state_abbr}-{stu_id[:8]}", "Last_name": l, "First_name": f, "Grade": s_grade, "Gender": random.choice(['M', 'F']), "DOB": generate_dob(s_grade), "Student_Email": email, "Username": uname, "Race": random.choices(CLEVER_RACE_VALUES, weights=RACE_WEIGHTS)[0], "Home_language": random.choices(LANG_KEYS, weights=LANG_WEIGHTS)[0], "IEP_status": "Y" if random.random() < config["PROB_IEP"] else "N", "FRL_status": "Y" if random.random() < config["PROB_FRL"] else "N", "ELL_status": "Y" if random.random() < config["PROB_ELL"] else "N", "Section_504_status": "Y" if random.random() < config["PROB_504"] else "N", "Gifted_status": "Y" if random.random() < config["PROB_GIFTED"] else "N", "Disability_status": has_disability, "Disability_type": dis_type, "Disability_code": dis_code}
-                if config["DO_EXTENSIONS"]: stu_obj['ext.locker_number'], stu_obj['ext.bus_route'] = random.randint(100, 9999), random.choice(['Route A', 'Route B'])
-                school_student_objs.append(stu_obj)
+                stu_obj = {
+                    "School_id": school_id, "Student_id": stu_id, "Student_number": stu_id[:8], "State_id": f"{state_abbr}-{stu_id[:8]}", 
+                    "Last_name": l, "First_name": f, "Grade": s_grade, "Gender": random.choice(['M', 'F']), 
+                    "DOB": generate_dob(s_grade), "Student_email": email, "Username": uname, 
+                    "Race": random.choices(CLEVER_RACE_VALUES, weights=RACE_WEIGHTS)[0], 
+                    "Home_language": random.choices(LANG_KEYS, weights=LANG_WEIGHTS)[0], 
+                    "IEP_status": "Y" if random.random() < config["PROB_IEP"] else "N", 
+                    "FRL_status": "Y" if random.random() < config["PROB_FRL"] else "N", 
+                    "ELL_status": "Y" if random.random() < config["PROB_ELL"] else "N", 
+                    "Section_504_status": "Y" if random.random() < config["PROB_504"] else "N", 
+                    "Gifted_status": "Y" if random.random() < config["PROB_GIFTED"] else "N", 
+                    "Disability_status": has_disability, "Disability_type": dis_type, "Disability_code": dis_code,
+                    
+                    # --- PRE-FILL OPTIONAL COLUMNS TO PREVENT CSV SHIFTING ---
+                    "ext.locker_number": "", 
+                    "ext.bus_route": "", 
+                    "Contact_relationship": "", 
+                    "Contact_type": "", 
+                    "Contact_name": "", 
+                    "Contact_phone": "", 
+                    "Contact_phone_type": "", 
+                    "Contact_email": "", 
+                    "Contact_sis_id": ""
+                }
                 
                 if config["DO_CONTACTS"]:
                     for c in generate_household_contacts(l):
@@ -244,15 +269,20 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
 
             if config["INCLUDE_SUMMER"]:
                 summer_term = generate_summer_term(config["SCHOOL_START_YEAR"])
-                summer_teachers = random.sample(school_teacher_ids, k=max(1, int(len(school_teacher_ids) * 0.35)))
+                
+                # Added 'if school_teacher_ids else []'
+                summer_teachers = random.sample(school_teacher_ids, k=max(1, int(len(school_teacher_ids) * 0.35))) if school_teacher_ids else []
+                
                 summer_sections = []
                 for st_id in summer_teachers:
                     for _ in range(random.randint(1,2)):
                         sec_id, s_grade, s_subj = f"SUM-{uuid.uuid4().hex[:6]}", random.choice(grade_list), "Summer " + random.choice(['Math', 'Reading', 'Credit Recovery'])
-                        chunk_sections.append({"School_id": school_id, "Section_id": sec_id, "Teacher_id": st_id, "Teacher_2_id": "", "Name": f"{s_grade} - {s_subj}", "Grade": s_grade, "Subject": s_subj, "Term_name": summer_term["Term_name"], "Term_start": summer_term["Term_start"], "Term_end": summer_term["Term_end"]})
+                        chunk_sections.append({"School_id": school_id, "Section_id": sec_id, "Teacher_id": st_id, "Teacher_2_id": "", "Name": f"{s_grade} - {s_subj}", "Grade": s_grade, "Subject": s_subj, "Term_name": summer_term["Term_name"], "Term_start": summer_term["Term_start"], "Term_end": summer_term["Term_end"], "Period": "1"})
                         summer_sections.append({"id": sec_id, "grade": s_grade})
                 
-                summer_students = random.sample(school_student_objs, k=max(1, int(len(school_student_objs) * 0.30)))
+                # Added 'if school_student_objs else []'
+                summer_students = random.sample(school_student_objs, k=max(1, int(len(school_student_objs) * 0.30))) if school_student_objs else []
+                
                 summer_students_by_grade = {g: [s for s in summer_students if s['Grade'] == g] for g in grade_list}
                 for sec in summer_sections:
                     avail = summer_students_by_grade.get(sec['grade'], [])
