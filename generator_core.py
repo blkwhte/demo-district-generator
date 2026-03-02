@@ -140,7 +140,7 @@ def init_files(out_dir, schema):
         "schools": ["School_id", "School_name", "School_number", "Low_grade", "High_grade", "Principal", "Principal_email", "School_address", "School_city", "School_state", "School_zip", "School_phone"],
         "teachers": ["School_id", "Teacher_id", "Teacher_number", "State_teacher_id", "Teacher_email", "Username", "First_name", "Last_name", "Title"],
         "staff": ["School_id", "Staff_id", "Staff_email", "First_name", "Last_name", "Department", "Title"],
-        "students": ["School_id", "Student_id", "Student_number", "State_id", "Last_name", "First_name", "Grade", "Gender", "DOB", "Student_Email", "Username", "Race", "Home_language", "IEP_status", "FRL_status", "ELL_status", "Section_504_status", "Gifted_status", "Disability_status", "Disability_type", "Disability_code", "ext.locker_number", "ext.bus_route", "Contact_relationship", "Contact_type", "Contact_name", "Contact_phone", "Contact_phone_type", "Contact_email", "Contact_sis_id"],
+        "students": ["School_id", "Student_id", "Student_number", "State_id", "Last_name", "First_name", "Grade", "Gender", "DOB", "Student_email", "Username", "Race", "Home_language", "IEP_status", "FRL_status", "ELL_status", "Section_504_status", "Gifted_status", "Disability_status", "Disability_type", "Disability_code", "ext.locker_number", "ext.bus_route", "Contact_relationship", "Contact_type", "Contact_name", "Contact_phone", "Contact_phone_type", "Contact_email", "Contact_sis_id"],
         "sections": ["School_id", "Section_id", "Teacher_id", "Teacher_2_id", "Name", "Grade", "Subject", "Term_name", "Term_start", "Term_end", "Period"],
         "enrollments": ["School_id", "Section_id", "Student_id"],
         "users": ["School_name", "User_type", "User_id", "First_name", "Last_name", "Email", "Username", "Grade", "DOB"],
@@ -183,7 +183,16 @@ def transform_to_anyschool(students, teachers, staff, sections, enrollments, sch
         if s['Student_id'] in seen_students: continue
         seen_students.add(s['Student_id'])
         mapped_grade = GRADE_MAP.get(str(s['Grade']), str(s['Grade']))
-        users_out.append({"School_name": school_map[s['School_id']]['name'], "User_type": "student", "User_id": s['Student_id'], "First_name": s['First_name'], "Last_name": s['Last_name'], "Email": s['Student_Email'], "Username": s.get('Username', ''), "Grade": mapped_grade, "DOB": fmt_date(s['DOB'])})
+        users_out.append({"School_name": school_map[s['School_id']]['name'],
+                          "User_type": "student",
+                          "User_id": s['Student_id'],
+                          "First_name": s['First_name'],
+                          "Last_name": s['Last_name'],
+                          "Email": s['Student_email'],
+                          "Username": s.get('Username', ''),
+                          "Grade": mapped_grade,
+                          "DOB": fmt_date(s['DOB'])
+                          })
     
     for t in teachers: users_out.append({"School_name": school_map[t['School_id']]['name'], "User_type": "teacher", "User_id": t['Teacher_id'], "First_name": t['First_name'], "Last_name": t['Last_name'], "Email": t['Teacher_email'], "Username": t.get('Username', ''), "Grade": "", "DOB": ""})
     for st in staff: users_out.append({"School_name": school_map[st['School_id']]['name'], "User_type": "staff", "User_id": st['Staff_id'], "First_name": st['First_name'], "Last_name": st['Last_name'], "Email": st['Staff_email'], "Username": st.get('Staff_email', '').split('@')[0], "Grade": "", "DOB": ""})
@@ -227,37 +236,33 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
             low, high = ('KG', '5') if 'Elementary' in school_type else ('6', '8') if 'Middle' in school_type else ('9', '12') if 'High' in school_type else ('KG', '12')
             city, zip_pre = random.choice(REAL_LOCATIONS.get(state_abbr, [("City", "000")]))
             
-            # Generate split name for the principal so they can be added to staff
+            # 1. --- GENERATE PRINCIPAL AND ADD TO SCHOOL & STAFF ---
             prin_first, prin_last = fake.first_name(), fake.last_name()
             prin_email = f"principal.{school_id}@{current_domain}"
             
-            chunk_schools.append({"School_id": school_id,
-                                  "School_name": f"{fake.last_name()} {school_type}",
-                                  "School_number": school_code,
-                                  "Low_grade": low,
-                                  "High_grade": high,
-                                  "Principal": f"{prin_first} {prin_last}",
-                                  "Principal_email": prin_email,
-                                  "School_address": fake.street_address(),
-                                  "School_city": city,
-                                  "School_state": state_abbr,
-                                  "School_zip": f"{zip_pre}{random.randint(10, 99)}",
-                                  "School_phone": fake.phone_number()
-                                  })
+            chunk_schools.append({
+                "School_id": school_id, "School_name": f"{fake.last_name()} {school_type}", 
+                "School_number": school_code, "Low_grade": low, "High_grade": high, 
+                "Principal": f"{prin_first} {prin_last}", # Combined name for schools.csv
+                "Principal_email": prin_email, "School_address": fake.street_address(), 
+                "School_city": city, "School_state": state_abbr, "School_zip": f"{zip_pre}{random.randint(10, 99)}", 
+                "School_phone": fake.phone_number()
+            })
 
-            # Add the Principal directly to the staff file
             chunk_staff.append({
                 "School_id": school_id, 
                 "Staff_id": get_hex_id(7) if config["ID_MODE"] == 'alphanumeric' else get_sequential_id(base_id_seq, 90000 + s_idx), 
                 "Staff_email": prin_email, 
-                "First_name": prin_first, 
-                "Last_name": prin_last, 
+                "First_name": prin_first, # Split name for staff.csv
+                "Last_name": prin_last,   # Split name for staff.csv
                 "Department": "Administration", 
                 "Title": "Principal"
             })
 
+            # 2. --- GENERATE TEACHERS ---
             num_teachers = parse_count(config["TEACHERS_PER_SCHOOL"])
             school_teacher_ids = []
+            
             for t_idx in range(num_teachers):
                 t_id = get_hex_id(7) if config["ID_MODE"] == 'alphanumeric' else get_sequential_id(base_id_seq, (s_idx * 1000) + t_idx)
                 f, l = fake.first_name(), fake.last_name()
@@ -266,20 +271,17 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
                 chunk_teachers.append({
                     "School_id": school_id,
                     "Teacher_id": t_id,
-                    "Teacher_number": t_id[:8],
+                    "Teacher_number": t_id[:8], 
                     "State_teacher_id": f"{state_abbr}-{t_id[:8]}",
-                    "Teacher_email": email,
+                    "Teacher_email": email, 
                     "Username": uname,
                     "First_name": f,
                     "Last_name": l,
                     "Title": "Teacher"
                 })
-                
-                # ---> THIS STAYS INSIDE THE LOOP <---
                 school_teacher_ids.append(t_id)
-                
-            # Create a Multi-Role User (Teacher + Staff) by duplicating the first teacher into the staff file
-            # ---> THIS STAYS OUTSIDE THE LOOP <---
+
+            # 3. --- CREATE MULTI-ROLE TEACHER ---
             if chunk_teachers:
                 multi_role_teacher = chunk_teachers[0]
                 chunk_staff.append({
