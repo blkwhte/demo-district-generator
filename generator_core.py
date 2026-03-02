@@ -227,7 +227,34 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
             low, high = ('KG', '5') if 'Elementary' in school_type else ('6', '8') if 'Middle' in school_type else ('9', '12') if 'High' in school_type else ('KG', '12')
             city, zip_pre = random.choice(REAL_LOCATIONS.get(state_abbr, [("City", "000")]))
             
-            chunk_schools.append({"School_id": school_id, "School_name": f"{fake.last_name()} {school_type}", "School_number": school_code, "Low_grade": low, "High_grade": high, "Principal": fake.name(), "Principal_email": f"principal.{school_id}@{current_domain}", "School_address": fake.street_address(), "School_city": city, "School_state": state_abbr, "School_zip": f"{zip_pre}{random.randint(10, 99)}", "School_phone": fake.phone_number()})
+            # Generate split name for the principal so they can be added to staff
+            prin_first, prin_last = fake.first_name(), fake.last_name()
+            prin_email = f"principal.{school_id}@{current_domain}"
+            
+            chunk_schools.append({"School_id": school_id,
+                                  "School_name": f"{fake.last_name()} {school_type}",
+                                  "School_number": school_code,
+                                  "Low_grade": low,
+                                  "High_grade": high,
+                                  "Principal": f"{prin_first} {prin_last}",
+                                  "Principal_email": prin_email,
+                                  "School_address": fake.street_address(),
+                                  "School_city": city,
+                                  "School_state": state_abbr,
+                                  "School_zip": f"{zip_pre}{random.randint(10, 99)}",
+                                  "School_phone": fake.phone_number()
+                                  })
+
+            # Add the Principal directly to the staff file
+            chunk_staff.append({
+                "School_id": school_id, 
+                "Staff_id": get_hex_id(7) if config["ID_MODE"] == 'alphanumeric' else get_sequential_id(base_id_seq, 90000 + s_idx), 
+                "Staff_email": prin_email, 
+                "First_name": prin_first, 
+                "Last_name": prin_last, 
+                "Department": "Administration", 
+                "Title": "Principal"
+            })
 
             num_teachers = parse_count(config["TEACHERS_PER_SCHOOL"])
             school_teacher_ids = []
@@ -235,8 +262,35 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
                 t_id = get_hex_id(7) if config["ID_MODE"] == 'alphanumeric' else get_sequential_id(base_id_seq, (s_idx * 1000) + t_idx)
                 f, l = fake.first_name(), fake.last_name()
                 uname, email = generate_email_username(f, l, current_domain, config["USERNAME_FMT"])
-                chunk_teachers.append({"School_id": school_id, "Teacher_id": t_id, "Teacher_number": t_id[:8], "State_teacher_id": f"{state_abbr}-{t_id[:8]}", "Teacher_email": email, "Username": uname, "First_name": f, "Last_name": l, "Title": "Teacher"})
+                
+                chunk_teachers.append({
+                    "School_id": school_id,
+                    "Teacher_id": t_id,
+                    "Teacher_number": t_id[:8],
+                    "State_teacher_id": f"{state_abbr}-{t_id[:8]}",
+                    "Teacher_email": email,
+                    "Username": uname,
+                    "First_name": f,
+                    "Last_name": l,
+                    "Title": "Teacher"
+                })
+                
+                # ---> THIS STAYS INSIDE THE LOOP <---
                 school_teacher_ids.append(t_id)
+                
+            # Create a Multi-Role User (Teacher + Staff) by duplicating the first teacher into the staff file
+            # ---> THIS STAYS OUTSIDE THE LOOP <---
+            if chunk_teachers:
+                multi_role_teacher = chunk_teachers[0]
+                chunk_staff.append({
+                    "School_id": school_id, 
+                    "Staff_id": get_hex_id(7) if config["ID_MODE"] == 'alphanumeric' else get_sequential_id(base_id_seq, 80000 + s_idx), 
+                    "Staff_email": multi_role_teacher["Teacher_email"], 
+                    "First_name": multi_role_teacher["First_name"], 
+                    "Last_name": multi_role_teacher["Last_name"], 
+                    "Department": "Academics", 
+                    "Title": "Department Chair"
+                })
 
             grade_list = [str(g) if g > 0 else 'KG' for g in range(int(low) if low.isdigit() else 0, (int(high) if high.isdigit() else 12) + 1)]
             school_section_ids = []
