@@ -59,7 +59,17 @@ DISABILITY_CODES = list(DISABILITY_MAP.keys())
 # ==========================================
 def get_hex_id(length=6): return uuid.uuid4().hex[:length]
 def get_sequential_id(base, counter): return str(base + counter)
-def clean_phone(): return re.sub("[^0-9]", "", fake.phone_number())[:10]
+def clean_phone(): 
+    # Extract just the numbers from the Faker generated phone number
+    digits = re.sub("[^0-9]", "", fake.phone_number())
+    
+    # Ensure we always have exactly 10 digits just to be safe
+    if len(digits) < 10:
+        digits = digits.ljust(10, '0')
+    digits = digits[:10]
+    
+    # Return it in the standard US format: XXX-XXX-XXXX
+    return f"{digits[:3]}-{digits[3:6]}-{digits[6:]}"
 
 def parse_count(val_input):
     val_str = str(val_input).strip()
