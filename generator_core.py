@@ -153,6 +153,7 @@ def init_files(out_dir, schema):
         "students": ["School_id", "Student_id", "Student_number", "State_id", "Last_name", "First_name", "Grade", "Gender", "DOB", "Student_email", "Username", "Race", "Home_language", "IEP_status", "FRL_status", "ELL_status", "Section_504_status", "Gifted_status", "Disability_status", "Disability_type", "Disability_code", "ext.locker_number", "ext.bus_route", "Contact_relationship", "Contact_type", "Contact_name", "Contact_phone", "Contact_phone_type", "Contact_email", "Contact_sis_id"],
         "sections": ["School_id", "Section_id", "Teacher_id", "Teacher_2_id", "Name", "Grade", "Subject", "Term_name", "Term_start", "Term_end", "Period"],
         "enrollments": ["School_id", "Section_id", "Student_id"],
+        "attendance": ["Attendance_id", "School_id", "Student_id", "Section_id", "Attendance_date", "Attendance_status", "Attendance_type", "Excuse_code"],
         "users": ["School_name", "User_type", "User_id", "First_name", "Last_name", "Email", "Username", "Grade", "DOB"],
         "anyschool_sections": ["School_name", "Section_id", "User_id", "Teacher_id", "School_number", "Subject", "Period", "Section_name"]
     }
@@ -160,7 +161,7 @@ def init_files(out_dir, schema):
     if schema in ["standard", "both"]:
         std_dir = os.path.join(out_dir, "standard")
         os.makedirs(std_dir, exist_ok=True)
-        for k in ["schools", "teachers", "staff", "students", "sections", "enrollments"]:
+        for k in ["schools", "teachers", "staff", "students", "sections", "enrollments", "attendance"]:
             p = os.path.join(std_dir, f"{k}.csv")
             pd.DataFrame(columns=HEADERS[k]).to_csv(p, index=False)
             paths[f"std_{k}"] = p
@@ -239,6 +240,7 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
         for s_idx in range(config["SCHOOLS_PER_DISTRICT"]):
             chunk_schools, chunk_teachers, chunk_staff = [], [], []
             chunk_students, chunk_sections, chunk_enrollments = [], [], []
+            chunk_attendance = []
 
             school_id = get_hex_id(6) if config["ID_MODE"] == 'alphanumeric' else get_sequential_id(base_id_seq, s_idx * 10000)
             school_type = random.choice(['Elementary', 'Middle', 'High', 'Academy'])
@@ -391,12 +393,59 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
                         for s in random.sample(avail, k=min(random.randint(10, 20), len(avail))):
                             chunk_enrollments.append({"School_id": school_id, "Section_id": sec['id'], "Student_id": s['Student_id']})
 
+# --- 4. GENERATE ATTENDANCE ---
+            if config["DO_ATTENDANCE"]:
+                try:
+                    start_date = datetime.datetime.strptime(config["ATT_START_DATE"], "%Y-%m-%d")
+                except ValueError:
+                    start_date = datetime.date.today()
+                
+                att_days = parse_count(config["ATT_DAYS"])
+                att_mode = config["ATT_MODE"].lower()
+                
+                statuses = ["Present", "Absent", "Tardy"]
+                weights = [0.90, 0.06, 0.04]
+                
+                for day_offset in range(att_days):
+                    current_date = (start_date + datetime.timedelta(days=day_offset)).strftime("%Y-%m-%d")
+                    
+                    if att_mode == "section":
+                        for e in chunk_enrollments:
+                            status = random.choices(statuses, weights=weights)[0]
+                            chunk_attendance.append({
+                                "Attendance_id": f"ATT-{uuid.uuid4().hex[:8]}",
+                                "School_id": school_id,
+                                "Student_id": e["Student_id"],
+                                "Section_id": e["Section_id"],
+                                "Attendance_date": current_date,
+                                "Attendance_status": status,
+                                "Attendance_type": "section",
+                                "Excuse_code": "ILL" if status == "Absent" and random.random() < 0.5 else ""
+                            })
+                    else: # daily mode
+                        # Clever recommends using distinct students for Daily attendance rather than section mapping
+                        seen_daily_students = set()
+                        for s in chunk_students:
+                            if s["Student_id"] in seen_daily_students: continue
+                            seen_daily_students.add(s["Student_id"])
+                            
+                            status = random.choices(statuses, weights=weights)[0]
+                            chunk_attendance.append({
+                                "Attendance_id": f"ATT-{uuid.uuid4().hex[:8]}",
+                                "School_id": school_id,
+                                "Student_id": s["Student_id"],
+                                "Section_id": "",
+                                "Attendance_date": current_date,
+                                "Attendance_status": status,
+                                "Attendance_type": "daily",
+                                "Excuse_code": "ILL" if status == "Absent" and random.random() < 0.5 else ""
+                            })
             if s_idx == 0:
                  chunk_staff.insert(0, { "School_id": school_id, "Staff_id": get_hex_id(7) if config["ID_MODE"] == 'alphanumeric' else str(base_id_seq + 99999), "Staff_email": f"admin@{current_domain}", "First_name": "System", "Last_name": "Admin", "Department": "Central", "Title": "Admin" })
 
             # Write chunk to disk
             if "std_schools" in file_paths:
-                for data, key in [(chunk_schools, "std_schools"), (chunk_teachers, "std_teachers"), (chunk_staff, "std_staff"), (chunk_students, "std_students"), (chunk_sections, "std_sections"), (chunk_enrollments, "std_enrollments")]:
+                for data, key in [(chunk_schools, "std_schools"), (chunk_teachers, "std_teachers"), (chunk_staff, "std_staff"), (chunk_students, "std_students"), (chunk_sections, "std_sections"), (chunk_enrollments, "std_enrollments"), (chunk_attendance, "std_attendance")]:
                     append_data(data, file_paths[key])
             if "as_users" in file_paths:
                 u_chunk, s_chunk = transform_to_anyschool(chunk_students, chunk_teachers, chunk_staff, chunk_sections, chunk_enrollments, chunk_schools)
