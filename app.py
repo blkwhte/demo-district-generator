@@ -16,6 +16,9 @@ with st.sidebar:
     config["SCHOOLS_PER_DISTRICT"] = st.number_input("Schools per District", min_value=1, value=DEFAULTS["SCHOOLS_PER_DISTRICT"])
     config["ID_MODE"] = st.selectbox("ID Mode", ["alphanumeric", "sequential"], index=0)
     config["OUTPUT_SCHEMA"] = st.selectbox("Schema", ["standard", "anyschool", "both"], index=0)
+    st.markdown("---")
+    st.header("Edge Cases")
+    config["DO_3_DAY_ROTATION"] = st.checkbox("Generate 3-Day Event Rotation", value=False)
 
     # --- NEW ATTENDANCE SECTION ---
     st.markdown("---")

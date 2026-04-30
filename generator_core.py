@@ -37,7 +37,8 @@ DEFAULTS = {
     "DO_ATTENDANCE": False,
     "ATT_START_DATE": "2025-09-01", 
     "ATT_DAYS": 5, 
-    "ATT_MODE": "Section" 
+    "ATT_MODE": "Section",
+    "DO_3_DAY_ROTATION": False # <-- NEW TOGGLE
 }
 
 GENERIC_DISTRICT_NAMES = [ "MapleValley", "OakRiver", "SummitHeights", "PineCreek", "LibertyUnion", "Heritage", "PioneerValley", "GrandView", "Clearwater", "HopeSprings", "NorthStar", "GoldenPlains", "SilverLake", "WillowCreek", "Unity", "CedarRidge" ]
@@ -60,15 +61,9 @@ DISABILITY_CODES = list(DISABILITY_MAP.keys())
 def get_hex_id(length=6): return uuid.uuid4().hex[:length]
 def get_sequential_id(base, counter): return str(base + counter)
 def clean_phone(): 
-    # Extract just the numbers from the Faker generated phone number
     digits = re.sub("[^0-9]", "", fake.phone_number())
-    
-    # Ensure we always have exactly 10 digits just to be safe
-    if len(digits) < 10:
-        digits = digits.ljust(10, '0')
+    if len(digits) < 10: digits = digits.ljust(10, '0')
     digits = digits[:10]
-    
-    # Return it in the standard US format: XXX-XXX-XXXX
     return f"{digits[:3]}-{digits[3:6]}-{digits[6:]}"
 
 def parse_count(val_input):
@@ -76,12 +71,10 @@ def parse_count(val_input):
     if "-" in val_str:
         try:
             low, high = map(int, val_str.split("-"))
-            # max(1, ...) ensures the lowest possible return is 1
             return max(1, random.randint(low, high))
         except: return 10
     else: 
-        try:
-            return max(1, int(val_str))
+        try: return max(1, int(val_str))
         except: return 10
 
 def generate_dob(grade):
@@ -91,6 +84,8 @@ def generate_dob(grade):
 
 def generate_email_username(first, last, domain, fmt):
     f, l = first.lower().replace(" ", ""), last.lower().replace(" ", "")
+    # Sanitize for actual email address logic (even if name has apostrophes)
+    f, l = re.sub(r'[^a-z]', '', f), re.sub(r'[^a-z]', '', l)
     u = f"{f}.{l}{random.randint(10,99)}"
     return u, f"{u}@{domain}"
 
@@ -108,31 +103,14 @@ def generate_summer_term(anchor_year_str):
     return {"Term_name": f"Summer {y_end}", "Term_start": f"{y_end}-06-01", "Term_end": f"{y_end}-07-30"}
 
 def generate_household_contacts(student_last_name):
-    # Define realistic household structures and their relative probabilities
-    # Format: (Relationship, Gender_for_Name, Contact_Type)
-    rel_options = [
-        ("Mother", "female", "Parent/Guardian"),
-        ("Father", "male", "Parent/Guardian"),
-        ("Grandmother", "female", "Emergency"),
-        ("Grandfather", "male", "Emergency"),
-        ("Aunt", "female", "Emergency"),
-        ("Uncle", "male", "Emergency"),
-        ("Guardian", "neutral", "Parent/Guardian")
-    ]
-    # Weights heavily favor parents, but include a healthy mix of other relatives/guardians
+    rel_options = [("Mother", "female", "Parent/Guardian"), ("Father", "male", "Parent/Guardian"), ("Grandmother", "female", "Emergency"), ("Grandfather", "male", "Emergency"), ("Aunt", "female", "Emergency"), ("Uncle", "male", "Emergency"), ("Guardian", "neutral", "Parent/Guardian")]
     weights = [40, 40, 5, 5, 3, 3, 4] 
-    
-    # Select a relationship based on the weights
     choice = random.choices(rel_options, weights=weights, k=1)[0]
     relationship, gender, contact_type = choice
     
-    # Generate the appropriate first name based on the relationship
-    if gender == "female":
-        f_name = fake.first_name_female()
-    elif gender == "male":
-        f_name = fake.first_name_male()
-    else:
-        f_name = fake.first_name() # Neutral/Any
+    if gender == "female": f_name = fake.first_name_female()
+    elif gender == "male": f_name = fake.first_name_male()
+    else: f_name = fake.first_name()
         
     return [{ 
         "Contact_relationship": relationship, 
@@ -140,11 +118,11 @@ def generate_household_contacts(student_last_name):
         "Contact_name": f"{f_name} {student_last_name}", 
         "Contact_phone": clean_phone(), 
         "Contact_phone_type": "Cell", 
-        "Contact_email": f"{f_name}.{student_last_name}@example.com".lower(), 
+        "Contact_email": f"{re.sub(r'[^a-z]', '', f_name.lower())}.{re.sub(r'[^a-z]', '', student_last_name.lower())}@example.com", 
         "Contact_sis_id": f"cont-{uuid.uuid4().hex[:8]}" 
     }]
 
-# --- FILE STREAMING HELPERS (With AnySchool Fixes) ---
+# --- FILE STREAMING HELPERS ---
 def init_files(out_dir, schema):
     HEADERS = {
         "schools": ["School_id", "School_name", "School_number", "Low_grade", "High_grade", "Principal", "Principal_email", "School_address", "School_city", "School_state", "School_zip", "School_phone"],
@@ -194,16 +172,7 @@ def transform_to_anyschool(students, teachers, staff, sections, enrollments, sch
         if s['Student_id'] in seen_students: continue
         seen_students.add(s['Student_id'])
         mapped_grade = GRADE_MAP.get(str(s['Grade']), str(s['Grade']))
-        users_out.append({"School_name": school_map[s['School_id']]['name'],
-                          "User_type": "student",
-                          "User_id": s['Student_id'],
-                          "First_name": s['First_name'],
-                          "Last_name": s['Last_name'],
-                          "Email": s['Student_email'],
-                          "Username": s.get('Username', ''),
-                          "Grade": mapped_grade,
-                          "DOB": fmt_date(s['DOB'])
-                          })
+        users_out.append({"School_name": school_map[s['School_id']]['name'], "User_type": "student", "User_id": s['Student_id'], "First_name": s['First_name'], "Last_name": s['Last_name'], "Email": s['Student_email'], "Username": s.get('Username', ''), "Grade": mapped_grade, "DOB": fmt_date(s['DOB'])})
     
     for t in teachers: users_out.append({"School_name": school_map[t['School_id']]['name'], "User_type": "teacher", "User_id": t['Teacher_id'], "First_name": t['First_name'], "Last_name": t['Last_name'], "Email": t['Teacher_email'], "Username": t.get('Username', ''), "Grade": "", "DOB": ""})
     for st in staff: users_out.append({"School_name": school_map[st['School_id']]['name'], "User_type": "staff", "User_id": st['Staff_id'], "First_name": st['First_name'], "Last_name": st['Last_name'], "Email": st['Staff_email'], "Username": st.get('Staff_email', '').split('@')[0], "Grade": "", "DOB": ""})
@@ -217,61 +186,55 @@ def transform_to_anyschool(students, teachers, staff, sections, enrollments, sch
         
     return users_out, sections_out
 
+# --- NEW: BATCH EXPORT HELPER ---
+def export_district_state(config, base_dir, dist_name, folder_suffix, db):
+    """Writes the current state of the district memory database to CSVs"""
+    out_dir = os.path.join(base_dir, f"{dist_name}_{folder_suffix}")
+    os.makedirs(out_dir, exist_ok=True)
+    file_paths = init_files(out_dir, config["OUTPUT_SCHEMA"])
+
+    if "std_schools" in file_paths:
+        for data, key in [(db["schools"], "std_schools"), (db["teachers"], "std_teachers"), (db["staff"], "std_staff"), (db["students"], "std_students"), (db["sections"], "std_sections"), (db["enrollments"], "std_enrollments"), (db["attendance"], "std_attendance")]:
+            append_data(data, file_paths[key])
+            
+    if "as_users" in file_paths:
+        u_chunk, s_chunk = transform_to_anyschool(db["students"], db["teachers"], db["staff"], db["sections"], db["enrollments"], db["schools"])
+        append_data(u_chunk, file_paths["as_users"])
+        append_data(s_chunk, file_paths["as_sections"])
+
 # ==========================================
 # 3. MAIN GENERATION ENGINE
 # ==========================================
 def run_generation(config, base_output_dir, status_callback=None, progress_callback=None):
     random.shuffle(GENERIC_DISTRICT_NAMES)
     CORE_TERMS = generate_term_schedule(config["SCHOOL_START_YEAR"], config["NUM_TERMS"])
+    do_3_day = config.get("DO_3_DAY_ROTATION", False)
     
     for i in range(config["NUM_DISTRICTS"]):
         dist_name = GENERIC_DISTRICT_NAMES[i % len(GENERIC_DISTRICT_NAMES)]
         if status_callback: status_callback(f"Generating {dist_name}...")
-        
-        dist_dir = os.path.join(base_output_dir, f"{dist_name}_Data")
-        os.makedirs(dist_dir, exist_ok=True)
-        file_paths = init_files(dist_dir, config["OUTPUT_SCHEMA"])
 
         current_domain = config["EMAIL_DOMAIN"] if config["EMAIL_DOMAIN"] else f"{dist_name.lower()}.k12.edu"
         state_key = STATE_KEYS[i % len(STATE_KEYS)]
         state_name, state_abbr = STATE_MAPPINGS[state_key]
         base_id_seq = (i + 1) * 100000 
         
+        # --- HOLD ENTIRE DISTRICT IN MEMORY FOR MUTATIONS ---
+        dist_db = { "schools": [], "teachers": [], "staff": [], "students": [], "sections": [], "enrollments": [], "attendance": [] }
+        
         for s_idx in range(config["SCHOOLS_PER_DISTRICT"]):
-            chunk_schools, chunk_teachers, chunk_staff = [], [], []
-            chunk_students, chunk_sections, chunk_enrollments = [], [], []
-            chunk_attendance = []
-
             school_id = get_hex_id(6) if config["ID_MODE"] == 'alphanumeric' else get_sequential_id(base_id_seq, s_idx * 10000)
             school_type = random.choice(['Elementary', 'Middle', 'High', 'Academy'])
             school_code = f"{s_idx + 1:02d}"
             low, high = ('KG', '5') if 'Elementary' in school_type else ('6', '8') if 'Middle' in school_type else ('9', '12') if 'High' in school_type else ('KG', '12')
             city, zip_pre = random.choice(REAL_LOCATIONS.get(state_abbr, [("City", "000")]))
             
-            # 1. --- GENERATE PRINCIPAL AND ADD TO SCHOOL & STAFF ---
             prin_first, prin_last = fake.first_name(), fake.last_name()
             prin_email = f"principal.{school_id}@{current_domain}"
             
-            chunk_schools.append({
-                "School_id": school_id, "School_name": f"{fake.last_name()} {school_type}", 
-                "School_number": school_code, "Low_grade": low, "High_grade": high, 
-                "Principal": f"{prin_first} {prin_last}", # Combined name for schools.csv
-                "Principal_email": prin_email, "School_address": fake.street_address(), 
-                "School_city": city, "School_state": state_abbr, "School_zip": f"{zip_pre}{random.randint(10, 99)}", 
-                "School_phone": fake.phone_number()
-            })
+            dist_db["schools"].append({"School_id": school_id, "School_name": f"{fake.last_name()} {school_type}", "School_number": school_code, "Low_grade": low, "High_grade": high, "Principal": f"{prin_first} {prin_last}", "Principal_email": prin_email, "School_address": fake.street_address(), "School_city": city, "School_state": state_abbr, "School_zip": f"{zip_pre}{random.randint(10, 99)}", "School_phone": fake.phone_number()})
+            dist_db["staff"].append({"School_id": school_id, "Staff_id": get_hex_id(7) if config["ID_MODE"] == 'alphanumeric' else get_sequential_id(base_id_seq, 90000 + s_idx), "Staff_email": prin_email, "First_name": prin_first, "Last_name": prin_last, "Department": "Administration", "Title": "Principal"})
 
-            chunk_staff.append({
-                "School_id": school_id, 
-                "Staff_id": get_hex_id(7) if config["ID_MODE"] == 'alphanumeric' else get_sequential_id(base_id_seq, 90000 + s_idx), 
-                "Staff_email": prin_email, 
-                "First_name": prin_first, # Split name for staff.csv
-                "Last_name": prin_last,   # Split name for staff.csv
-                "Department": "Administration", 
-                "Title": "Principal"
-            })
-
-            # 2. --- GENERATE TEACHERS ---
             num_teachers = parse_count(config["TEACHERS_PER_SCHOOL"])
             school_teacher_ids = []
             
@@ -280,31 +243,12 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
                 f, l = fake.first_name(), fake.last_name()
                 uname, email = generate_email_username(f, l, current_domain, config["USERNAME_FMT"])
                 
-                chunk_teachers.append({
-                    "School_id": school_id,
-                    "Teacher_id": t_id,
-                    "Teacher_number": t_id[:8], 
-                    "State_teacher_id": f"{state_abbr}-{t_id[:8]}",
-                    "Teacher_email": email, 
-                    "Username": uname,
-                    "First_name": f,
-                    "Last_name": l,
-                    "Title": "Teacher"
-                })
+                dist_db["teachers"].append({"School_id": school_id, "Teacher_id": t_id, "Teacher_number": t_id[:8], "State_teacher_id": f"{state_abbr}-{t_id[:8]}", "Teacher_email": email, "Username": uname, "First_name": f, "Last_name": l, "Title": "Teacher"})
                 school_teacher_ids.append(t_id)
 
-            # 3. --- CREATE MULTI-ROLE TEACHER ---
-            if chunk_teachers:
-                multi_role_teacher = chunk_teachers[0]
-                chunk_staff.append({
-                    "School_id": school_id, 
-                    "Staff_id": get_hex_id(7) if config["ID_MODE"] == 'alphanumeric' else get_sequential_id(base_id_seq, 80000 + s_idx), 
-                    "Staff_email": multi_role_teacher["Teacher_email"], 
-                    "First_name": multi_role_teacher["First_name"], 
-                    "Last_name": multi_role_teacher["Last_name"], 
-                    "Department": "Academics", 
-                    "Title": "Department Chair"
-                })
+            if dist_db["teachers"]:
+                multi_role = dist_db["teachers"][-len(school_teacher_ids)] # Grab first teacher of this school
+                dist_db["staff"].append({"School_id": school_id, "Staff_id": get_hex_id(7) if config["ID_MODE"] == 'alphanumeric' else get_sequential_id(base_id_seq, 80000 + s_idx), "Staff_email": multi_role["Teacher_email"], "First_name": multi_role["First_name"], "Last_name": multi_role["Last_name"], "Department": "Academics", "Title": "Department Chair"})
 
             grade_list = [str(g) if g > 0 else 'KG' for g in range(int(low) if low.isdigit() else 0, (int(high) if high.isdigit() else 12) + 1)]
             school_section_ids = []
@@ -314,7 +258,7 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
                     for period_idx in range(config["SECTIONS_PER_TEACHER_TERM"]):
                         sec_id = get_hex_id(8) if config["ID_MODE"] == 'alphanumeric' else f"SEC-{uuid.uuid4().hex[:8]}"
                         s_grade, s_subj = random.choice(grade_list), random.choice(['Math', 'Science', 'ELA', 'History', 'Art', 'PE'])
-                        chunk_sections.append({"School_id": school_id, "Section_id": sec_id, "Teacher_id": t_id, "Teacher_2_id": "", "Name": f"{s_grade} - {s_subj}", "Grade": s_grade, "Subject": s_subj, "Term_name": term["Term_name"], "Term_start": term["Term_start"], "Term_end": term["Term_end"], "Period": str(period_idx + 1)})
+                        dist_db["sections"].append({"School_id": school_id, "Section_id": sec_id, "Teacher_id": t_id, "Teacher_2_id": "", "Name": f"{s_grade} - {s_subj}", "Grade": s_grade, "Subject": s_subj, "Term_name": term["Term_name"], "Term_start": term["Term_start"], "Term_end": term["Term_end"], "Period": str(period_idx + 1)})
                         school_section_ids.append({"id": sec_id, "grade": s_grade})
 
             avg_sec_size = parse_count(config["STUDENTS_PER_SECTION"])
@@ -324,7 +268,18 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
             for stu_idx in range(estimated_students):
                 stu_id = get_hex_id(6) if config["ID_MODE"] == 'alphanumeric' else get_sequential_id(base_id_seq, 200000 + (s_idx * 5000) + stu_idx)
                 f, l = fake.first_name(), fake.last_name()
+                
+                # --- STATIC EDGE CASES (Day 1 anomalies) ---
+                if do_3_day:
+                    r_val = random.random()
+                    if r_val < 0.02: l = "O'Connor" # Scenario 10
+                    elif r_val < 0.04: l = "Nuñez"  # Scenario 10
+                    elif r_val < 0.06: l = "Li"     # Scenario 12
+                
                 uname, email = generate_email_username(f, l, current_domain, config["USERNAME_FMT"])
+                
+                if do_3_day and random.random() < 0.01: email = email.replace("@", "") # Scenario 9
+                
                 s_grade = random.choice(grade_list)
                 has_disability = "Y" if random.random() < config["PROB_DISABILITY"] else "N"
                 dis_code, dis_type = (random.choice(DISABILITY_CODES), DISABILITY_MAP[random.choice(DISABILITY_CODES)]) if has_disability == "Y" else ("", "")
@@ -335,124 +290,77 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
                     "DOB": generate_dob(s_grade), "Student_email": email, "Username": uname, 
                     "Race": random.choices(CLEVER_RACE_VALUES, weights=RACE_WEIGHTS)[0], 
                     "Home_language": random.choices(LANG_KEYS, weights=LANG_WEIGHTS)[0], 
-                    "IEP_status": "Y" if random.random() < config["PROB_IEP"] else "N", 
-                    "FRL_status": "Y" if random.random() < config["PROB_FRL"] else "N", 
-                    "ELL_status": "Y" if random.random() < config["PROB_ELL"] else "N", 
-                    "Section_504_status": "Y" if random.random() < config["PROB_504"] else "N", 
-                    "Gifted_status": "Y" if random.random() < config["PROB_GIFTED"] else "N", 
-                    "Disability_status": has_disability, "Disability_type": dis_type, "Disability_code": dis_code,
-                    
-                    # --- PRE-FILL OPTIONAL COLUMNS TO PREVENT CSV SHIFTING ---
-                    "ext.locker_number": "", 
-                    "ext.bus_route": "", 
-                    "Contact_relationship": "", 
-                    "Contact_type": "", 
-                    "Contact_name": "", 
-                    "Contact_phone": "", 
-                    "Contact_phone_type": "", 
-                    "Contact_email": "", 
-                    "Contact_sis_id": ""
+                    "IEP_status": "Y" if random.random() < config["PROB_IEP"] else "N", "FRL_status": "Y" if random.random() < config["PROB_FRL"] else "N", 
+                    "ELL_status": "Y" if random.random() < config["PROB_ELL"] else "N", "Section_504_status": "Y" if random.random() < config["PROB_504"] else "N", 
+                    "Gifted_status": "Y" if random.random() < config["PROB_GIFTED"] else "N", "Disability_status": has_disability, "Disability_type": dis_type, "Disability_code": dis_code,
+                    "ext.locker_number": "", "ext.bus_route": "", "Contact_relationship": "", "Contact_type": "", "Contact_name": "", "Contact_phone": "", "Contact_phone_type": "", "Contact_email": "", "Contact_sis_id": ""
                 }
                 
                 school_student_objs.append(stu_obj)
-
                 if config["DO_CONTACTS"]:
                     for c in generate_household_contacts(l):
                         r = stu_obj.copy()
                         r.update(c)
-                        chunk_students.append(r)
-                else: chunk_students.append(stu_obj)
+                        dist_db["students"].append(r)
+                else: dist_db["students"].append(stu_obj)
 
             students_by_grade = {g: [s for s in school_student_objs if s['Grade'] == g] for g in grade_list}
             for sec in school_section_ids:
                 avail = students_by_grade.get(sec['grade'], [])
                 if avail:
                     for s in random.sample(avail, k=min(parse_count(config["STUDENTS_PER_SECTION"]), len(avail))):
-                        chunk_enrollments.append({"School_id": school_id, "Section_id": sec['id'], "Student_id": s['Student_id']})
-
-            if config["INCLUDE_SUMMER"]:
-                summer_term = generate_summer_term(config["SCHOOL_START_YEAR"])
-                
-                # Added 'if school_teacher_ids else []'
-                summer_teachers = random.sample(school_teacher_ids, k=max(1, int(len(school_teacher_ids) * 0.35))) if school_teacher_ids else []
-                
-                summer_sections = []
-                for st_id in summer_teachers:
-                    for _ in range(random.randint(1,2)):
-                        sec_id, s_grade, s_subj = f"SUM-{uuid.uuid4().hex[:6]}", random.choice(grade_list), "Summer " + random.choice(['Math', 'Reading', 'Credit Recovery'])
-                        chunk_sections.append({"School_id": school_id, "Section_id": sec_id, "Teacher_id": st_id, "Teacher_2_id": "", "Name": f"{s_grade} - {s_subj}", "Grade": s_grade, "Subject": s_subj, "Term_name": summer_term["Term_name"], "Term_start": summer_term["Term_start"], "Term_end": summer_term["Term_end"], "Period": "1"})
-                        summer_sections.append({"id": sec_id, "grade": s_grade})
-                
-                # Added 'if school_student_objs else []'
-                summer_students = random.sample(school_student_objs, k=max(1, int(len(school_student_objs) * 0.30))) if school_student_objs else []
-                
-                summer_students_by_grade = {g: [s for s in summer_students if s['Grade'] == g] for g in grade_list}
-                for sec in summer_sections:
-                    avail = summer_students_by_grade.get(sec['grade'], [])
-                    if avail:
-                        for s in random.sample(avail, k=min(random.randint(10, 20), len(avail))):
-                            chunk_enrollments.append({"School_id": school_id, "Section_id": sec['id'], "Student_id": s['Student_id']})
-
-            # --- 4. GENERATE ATTENDANCE (Strictly Absent/Tardy per Clever Spec) ---
-            if config["DO_ATTENDANCE"]:
-                try:
-                    start_date = datetime.datetime.strptime(config["ATT_START_DATE"], "%Y-%m-%d")
-                except ValueError:
-                    start_date = datetime.date.today()
-                
-                att_days = parse_count(config["ATT_DAYS"])
-                att_mode = config["ATT_MODE"].lower()
-                
-                # Clever strict enum values
-                statuses = ["Absent", "Tardy"]
-                weights = [0.60, 0.40] # 60% of exceptions are absences, 40% are tardies
-                
-                for day_offset in range(att_days):
-                    current_date = (start_date + datetime.timedelta(days=day_offset)).strftime("%Y-%m-%d")
-                    
-                    if att_mode == "section":
-                        # Pick ~5% of enrollments to be absent/tardy
-                        daily_exceptions = random.sample(chunk_enrollments, k=int(len(chunk_enrollments) * 0.05))
-                        for e in daily_exceptions:
-                            status = random.choices(statuses, weights=weights)[0]
-                            chunk_attendance.append({
-                                "Attendance_id": f"ATT-{uuid.uuid4().hex[:8]}",
-                                "School_id": school_id, 
-                                "Student_id": e["Student_id"],
-                                "Section_id": e["Section_id"],
-                                "Attendance_date": current_date,
-                                "Attendance_status": status,
-                                "Attendance_type": "section",
-                                "Excuse_code": "ILL" if status == "Absent" and random.random() < 0.5 else ""
-                            })
-                    else: # daily mode
-                        # Grab a unique list of students for the school
-                        unique_students = list({s["Student_id"]: s for s in chunk_students}.values())
-                        # Pick ~5% of students to be absent/tardy for the whole day
-                        daily_exceptions = random.sample(unique_students, k=max(1, int(len(unique_students) * 0.05)))
-                        for s in daily_exceptions:
-                            status = random.choices(statuses, weights=weights)[0]
-                            chunk_attendance.append({
-                                "Attendance_id": f"ATT-{uuid.uuid4().hex[:8]}",
-                                "School_id": school_id,
-                                "Student_id": s["Student_id"],
-                                "Section_id": "",
-                                "Attendance_date": current_date,
-                                "Attendance_status": status,
-                                "Attendance_type": "daily",
-                                "Excuse_code": "ILL" if status == "Absent" and random.random() < 0.5 else ""
-                            })
+                        dist_db["enrollments"].append({"School_id": school_id, "Section_id": sec['id'], "Student_id": s['Student_id']})
 
             if s_idx == 0:
-                 chunk_staff.insert(0, { "School_id": school_id, "Staff_id": get_hex_id(7) if config["ID_MODE"] == 'alphanumeric' else str(base_id_seq + 99999), "Staff_email": f"admin@{current_domain}", "First_name": "System", "Last_name": "Admin", "Department": "Central", "Title": "Admin" })
+                 dist_db["staff"].insert(0, { "School_id": school_id, "Staff_id": get_hex_id(7) if config["ID_MODE"] == 'alphanumeric' else str(base_id_seq + 99999), "Staff_email": f"admin@{current_domain}", "First_name": "System", "Last_name": "Admin", "Department": "Central", "Title": "Admin" })
 
-            # Write chunk to disk
-            if "std_schools" in file_paths:
-                for data, key in [(chunk_schools, "std_schools"), (chunk_teachers, "std_teachers"), (chunk_staff, "std_staff"), (chunk_students, "std_students"), (chunk_sections, "std_sections"), (chunk_enrollments, "std_enrollments"), (chunk_attendance, "std_attendance")]:
-                    append_data(data, file_paths[key])
-            if "as_users" in file_paths:
-                u_chunk, s_chunk = transform_to_anyschool(chunk_students, chunk_teachers, chunk_staff, chunk_sections, chunk_enrollments, chunk_schools)
-                append_data(u_chunk, file_paths["as_users"])
-                append_data(s_chunk, file_paths["as_sections"])
+        # --- 3-DAY ROTATION ENGINE ---
+        if not do_3_day:
+            export_district_state(config, base_output_dir, dist_name, "Data", dist_db)
+        else:
+            if status_callback: status_callback(f"Generating {dist_name} Day 1...")
+            export_district_state(config, base_output_dir, dist_name, "Day_1", dist_db)
+
+            # ----- DAY 2 MUTATIONS -----
+            if status_callback: status_callback(f"Generating {dist_name} Day 2...")
+            
+            # Scenario 15: Student is deleted on Day 2
+            mia_student = dist_db["students"].pop(random.randint(0, len(dist_db["students"]) - 1))
+            mia_student_enrollments = [e for e in dist_db["enrollments"] if e["Student_id"] == mia_student["Student_id"]]
+            dist_db["enrollments"] = [e for e in dist_db["enrollments"] if e["Student_id"] != mia_student["Student_id"]]
+            
+            # Scenario 16: Section removed on Day 2
+            mia_section = dist_db["sections"].pop(random.randint(0, len(dist_db["sections"]) - 1))
+            mia_section_enrollments = [e for e in dist_db["enrollments"] if e["Section_id"] == mia_section["Section_id"]]
+            dist_db["enrollments"] = [e for e in dist_db["enrollments"] if e["Section_id"] != mia_section["Section_id"]]
+
+            # Scenario 35: Student contact ID changes Day over Day
+            if dist_db["students"]:
+                dist_db["students"][0]["Contact_sis_id"] = f"cont-{uuid.uuid4().hex[:8]}"
+
+            export_district_state(config, base_output_dir, dist_name, "Day_2", dist_db)
+
+            # ----- DAY 3 MUTATIONS -----
+            if status_callback: status_callback(f"Generating {dist_name} Day 3...")
+            
+            # Scenario 15/16 (Restored): Student and Section return
+            dist_db["students"].append(mia_student)
+            dist_db["sections"].append(mia_section)
+            dist_db["enrollments"].extend(mia_student_enrollments)
+            dist_db["enrollments"].extend(mia_section_enrollments)
+
+            # Scenario 38: Student transfers to a new school
+            if len(dist_db["schools"]) > 1:
+                transfer_student = dist_db["students"][1]
+                old_school = transfer_student["School_id"]
+                new_school = next(s["School_id"] for s in dist_db["schools"] if s["School_id"] != old_school)
+                
+                # Update school ID and strip old enrollments
+                for r in dist_db["students"]:
+                    if r["Student_id"] == transfer_student["Student_id"]:
+                        r["School_id"] = new_school
+                dist_db["enrollments"] = [e for e in dist_db["enrollments"] if e["Student_id"] != transfer_student["Student_id"]]
+
+            export_district_state(config, base_output_dir, dist_name, "Day_3", dist_db)
 
         if progress_callback: progress_callback((i + 1) / config["NUM_DISTRICTS"])
