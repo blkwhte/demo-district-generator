@@ -74,10 +74,6 @@ def generate_term_schedule(anchor_year_str, num_terms):
         terms.append({"Term_name": f"Sem 2 {y_end}",   "Term_start": f"{y_end}-01-05",   "Term_end": f"{y_end}-05-25"})
     return terms
 
-def generate_summer_term(anchor_year_str):
-    y_end = int(anchor_year_str) + 1
-    return {"Term_name": f"Summer {y_end}", "Term_start": f"{y_end}-06-01", "Term_end": f"{y_end}-07-30"}
-
 def generate_household_contacts(student_last_name):
     rel_options = [("Mother", "female", "Parent/Guardian"), ("Father", "male", "Parent/Guardian"), ("Grandmother", "female", "Emergency"), ("Grandfather", "male", "Emergency"), ("Aunt", "female", "Emergency"), ("Uncle", "male", "Emergency"), ("Guardian", "neutral", "Parent/Guardian")]
     choice = random.choices(rel_options, weights=[40, 40, 5, 5, 3, 3, 4], k=1)[0]
@@ -158,28 +154,18 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
     
     # --- EDGE CASE TRACKER ---
     edge_case_report = {
-        "Scenario 1 (Teachers in Multiple Schools)": [],
-        "Scenario 2 (Students in Multiple Schools)": [],
-        "Scenario 3 (Admins in Multiple Schools)": [],
-        "Scenario 4 (Nonsense Section Name)": [],
-        "Scenario 5 (Non-unique Section Names)": [],
-        "Scenario 6 (Section without Teacher)": [],
-        "Scenario 8 (Unexpected chars in Email)": [],
-        "Scenario 9 (Missing @ in Email)": [],
-        "Scenario 10 (Special characters in Name)": [],
-        "Scenario 11 (Student Name Max Char Limit)": [],
-        "Scenario 12 (Short Name)": [],
-        "Scenario 13 (Student Section/School Mismatch)": [],
-        "Scenario 14 (Teacher Section/School Mismatch)": [],
-        "Scenario 15 (Student Deleted Day 2, Restored Day 3)": [],
-        "Scenario 16 (Section Deleted Day 2, Restored Day 3)": [],
-        "Scenario 17 (Student without Enrollments)": [],
-        "Scenario 18 (Teacher without Enrollments)": [],
-        "Scenario 23 (Split Schools)": [],
-        "Scenario 28 (Student/Section Grade Mismatch)": [],
-        "Scenario 31 (No Username)": [],
-        "Scenario 35 (Contact ID changes Day 2)": [],
-        "Scenario 38 (Student Transfers School Day 3)": []
+        "Scenario 1 (Teachers in Multiple Schools)": [], "Scenario 2 (Students in Multiple Schools)": [], "Scenario 3 (Admins in Multiple Schools)": [],
+        "Scenario 4 (Nonsense Section Name)": [], "Scenario 5 (Non-unique Section Names)": [], "Scenario 6 (Section without Teacher)": [],
+        "Scenario 7 (SFTP UN Overwrite)": [], "Scenario 8 (Unexpected chars in Email)": [], "Scenario 9 (Missing @ in Email)": [],
+        "Scenario 10 (Special characters in Name)": [], "Scenario 11 (Student Name Max Char Limit)": [], "Scenario 12 (Short Name)": [],
+        "Scenario 13 (Student Section/School Mismatch)": [], "Scenario 14 (Teacher Section/School Mismatch)": [],
+        "Scenario 15 (Student Deleted Day 2, Restored Day 3)": [], "Scenario 16 (Section Deleted Day 2, Restored Day 3)": [],
+        "Scenario 17 (Student without Enrollments)": [], "Scenario 18 (Teacher without Enrollments)": [], "Scenario 19 (Section ID Max Char Limit)": [],
+        "Scenario 20 (Section moves to new school Day 3)": [], "Scenario 21 (Section grade unmapped)": [], "Scenario 23 (Split Schools)": [],
+        "Scenario 26 (Username Char Limits)": [], "Scenario 28 (Student/Section Grade Mismatch)": [], "Scenario 29 (Unsupported Student Grades)": [],
+        "Scenario 30 (SIS ID changes Day 2, reverts Day 3)": [], "Scenario 31 (No Username)": [], "Scenario 33 (Student/Teacher match SIS ID)": [],
+        "Scenario 35 (Contact ID changes Day 2)": [], "Scenario 36 (Contact type inconsistent Day 2)": [],
+        "Scenario 37 (Terms not in session)": [], "Scenario 38 (Student Transfers School Day 3)": [], "Scenario 39 (Teacher Transfers School Day 3)": []
     }
     
     for i in range(config["NUM_DISTRICTS"]):
@@ -219,6 +205,7 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
 
             for t_id in school_teacher_ids:
                 for term in CORE_TERMS:
+                    t_start, t_end = term["Term_start"], term["Term_end"]
                     for period_idx in range(config["SECTIONS_PER_TEACHER_TERM"]):
                         sec_id = get_hex_id(8) if config["ID_MODE"] == 'alphanumeric' else f"SEC-{uuid.uuid4().hex[:8]}"
                         s_grade, s_subj = random.choice(grade_list), random.choice(['Math', 'Science', 'ELA', 'History', 'Art', 'PE'])
@@ -233,11 +220,20 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
                             elif r_sec < 0.05:
                                 sec_name = "Homeroom"
                                 edge_case_report["Scenario 5 (Non-unique Section Names)"].append(f"Section_id: {sec_id} (Name: {sec_name})")
+                            elif r_sec < 0.06:
+                                sec_id = "SEC-LONG-" + "A"*50 # Scenario 19
+                                edge_case_report["Scenario 19 (Section ID Max Char Limit)"].append(f"Section_id: {sec_id}")
+                            elif r_sec < 0.07:
+                                s_grade = "13" # Scenario 21
+                                edge_case_report["Scenario 21 (Section grade unmapped)"].append(f"Section_id: {sec_id} (Grade: 13)")
+                            elif r_sec < 0.08:
+                                t_start, t_end = "2035-08-01", "2035-12-15" # Scenario 37
+                                edge_case_report["Scenario 37 (Terms not in session)"].append(f"Section_id: {sec_id} (Start: {t_start})")
                             elif r_sec > 0.98:
                                 assigned_teacher = ""
                                 edge_case_report["Scenario 6 (Section without Teacher)"].append(f"Section_id: {sec_id}")
 
-                        dist_db["sections"].append({"School_id": school_id, "Section_id": sec_id, "Teacher_id": assigned_teacher, "Teacher_2_id": "", "Name": sec_name, "Grade": s_grade, "Subject": s_subj, "Term_name": term["Term_name"], "Term_start": term["Term_start"], "Term_end": term["Term_end"], "Period": str(period_idx + 1)})
+                        dist_db["sections"].append({"School_id": school_id, "Section_id": sec_id, "Teacher_id": assigned_teacher, "Teacher_2_id": "", "Name": sec_name, "Grade": s_grade, "Subject": s_subj, "Term_name": term["Term_name"], "Term_start": t_start, "Term_end": t_end, "Period": str(period_idx + 1)})
                         school_section_ids.append({"id": sec_id, "grade": s_grade})
 
             estimated_students = int((len(school_section_ids) * parse_count(config["STUDENTS_PER_SECTION"])) / config["SECTIONS_PER_TEACHER_TERM"])
@@ -246,34 +242,28 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
             for stu_idx in range(estimated_students):
                 stu_id = get_hex_id(6) if config["ID_MODE"] == 'alphanumeric' else get_sequential_id(base_id_seq, 200000 + (s_idx * 5000) + stu_idx)
                 f, l = fake.first_name(), fake.last_name()
+                s_grade = random.choice(grade_list)
                 
                 if do_3_day:
                     r_val = random.random()
-                    if r_val < 0.02: 
-                        l = "O'Connor"; edge_case_report["Scenario 10 (Special characters in Name)"].append(f"Student_id: {stu_id}")
-                    elif r_val < 0.04: 
-                        l = "Nuñez"; edge_case_report["Scenario 10 (Special characters in Name)"].append(f"Student_id: {stu_id}")
-                    elif r_val < 0.06: 
-                        l = "Li"; edge_case_report["Scenario 12 (Short Name)"].append(f"Student_id: {stu_id}")
-                    elif r_val < 0.08:
-                        l = "Wolfeschlegelsteinhausenbergerdorff" * 2
-                        edge_case_report["Scenario 11 (Student Name Max Char Limit)"].append(f"Student_id: {stu_id}")
+                    if r_val < 0.02: l = "O'Connor"; edge_case_report["Scenario 10 (Special characters in Name)"].append(f"Student_id: {stu_id}")
+                    elif r_val < 0.04: l = "Nuñez"; edge_case_report["Scenario 10 (Special characters in Name)"].append(f"Student_id: {stu_id}")
+                    elif r_val < 0.06: l = "Li"; edge_case_report["Scenario 12 (Short Name)"].append(f"Student_id: {stu_id}")
+                    elif r_val < 0.08: l = "Wolfeschlegelsteinhausenbergerdorff" * 2; edge_case_report["Scenario 11 (Student Name Max Char Limit)"].append(f"Student_id: {stu_id}")
+                    elif r_val < 0.09: s_grade = "-1"; edge_case_report["Scenario 29 (Unsupported Student Grades)"].append(f"Student_id: {stu_id} (Grade: -1)")
+                    elif r_val < 0.10 and school_teacher_ids: 
+                        stu_id = school_teacher_ids[0] # Scenario 33 (Matching IDs)
+                        edge_case_report["Scenario 33 (Student/Teacher match SIS ID)"].append(f"Matched ID: {stu_id}")
                 
                 uname, email = generate_email_username(f, l, current_domain, config["USERNAME_FMT"])
                 
                 if do_3_day:
                     r_mail = random.random()
-                    if r_mail < 0.02:
-                        email = email.replace("@", ""); edge_case_report["Scenario 9 (Missing @ in Email)"].append(f"Student_id: {stu_id}")
-                    elif r_mail < 0.04:
-                        email = f"o'brien.{random.randint(10,99)}@{current_domain}"
-                        edge_case_report["Scenario 8 (Unexpected chars in Email)"].append(f"Student_id: {stu_id} (Email: {email})")
-                    
-                    if random.random() < 0.03:
-                        uname = ""
-                        edge_case_report["Scenario 31 (No Username)"].append(f"Student_id: {stu_id}")
+                    if r_mail < 0.02: email = email.replace("@", ""); edge_case_report["Scenario 9 (Missing @ in Email)"].append(f"Student_id: {stu_id}")
+                    elif r_mail < 0.04: email = f"o'brien.{random.randint(10,99)}@{current_domain}"; edge_case_report["Scenario 8 (Unexpected chars in Email)"].append(f"Student_id: {stu_id}")
+                    if random.random() < 0.03: uname = ""; edge_case_report["Scenario 31 (No Username)"].append(f"Student_id: {stu_id}")
+                    elif random.random() < 0.04: uname = uname + "superlongusername"*3; edge_case_report["Scenario 26 (Username Char Limits)"].append(f"Student_id: {stu_id}")
 
-                s_grade = random.choice(grade_list)
                 dis_code = random.choice(DISABILITY_CODES) if random.random() < config["PROB_DISABILITY"] else ""
                 
                 stu_obj = {
@@ -305,59 +295,51 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
 
             if s_idx == 0: dist_db["staff"].insert(0, { "School_id": school_id, "Staff_id": get_hex_id(7) if config["ID_MODE"] == 'alphanumeric' else str(base_id_seq + 99999), "Staff_email": f"admin@{current_domain}", "First_name": "System", "Last_name": "Admin", "Department": "Central", "Title": "Admin" })
 
-        # --- NEW: MULTI-SCHOOL EDGE CASES ---
+        # --- MULTI-SCHOOL EDGE CASES ---
         if do_3_day and len(dist_db["schools"]) > 1:
-            school_a = dist_db["schools"][0]["School_id"]
-            school_b = dist_db["schools"][1]["School_id"]
+            school_a, school_b = dist_db["schools"][0]["School_id"], dist_db["schools"][1]["School_id"]
 
-            # Scenario 1: Teacher in Multiple Schools
             scen_1_teacher = next((t for t in dist_db["teachers"] if t["School_id"] == school_a), None)
             if scen_1_teacher:
                 t_copy = scen_1_teacher.copy()
                 t_copy["School_id"] = school_b
                 dist_db["teachers"].append(t_copy)
-                edge_case_report["Scenario 1 (Teachers in Multiple Schools)"].append(f"Teacher_id: {t_copy['Teacher_id']} (Schools: {school_a}, {school_b})")
+                edge_case_report["Scenario 1 (Teachers in Multiple Schools)"].append(f"Teacher_id: {t_copy['Teacher_id']}")
 
-            # Scenario 2: Student in Multiple Schools
             scen_2_student = next((s for s in dist_db["students"] if s["School_id"] == school_a), None)
             if scen_2_student:
                 s_copy = scen_2_student.copy()
                 s_copy["School_id"] = school_b
                 dist_db["students"].append(s_copy)
-                edge_case_report["Scenario 2 (Students in Multiple Schools)"].append(f"Student_id: {s_copy['Student_id']} (Schools: {school_a}, {school_b})")
+                edge_case_report["Scenario 2 (Students in Multiple Schools)"].append(f"Student_id: {s_copy['Student_id']}")
 
-            # Scenario 3: Admin in Multiple Schools
             scen_3_staff = next((st for st in dist_db["staff"] if st["School_id"] == school_a and st["Title"] != "Admin"), None)
             if scen_3_staff:
                 st_copy = scen_3_staff.copy()
                 st_copy["School_id"] = school_b
                 dist_db["staff"].append(st_copy)
-                edge_case_report["Scenario 3 (Admins in Multiple Schools)"].append(f"Staff_id: {st_copy['Staff_id']} (Schools: {school_a}, {school_b})")
+                edge_case_report["Scenario 3 (Admins in Multiple Schools)"].append(f"Staff_id: {st_copy['Staff_id']}")
 
-            # Scenario 13: Student Section/School Mismatch
             scen_13_student = next((s for s in dist_db["students"] if s["School_id"] == school_a and s["Student_id"] != scen_2_student.get("Student_id")), None)
             scen_13_section = next((sec for sec in dist_db["sections"] if sec["School_id"] == school_b), None)
             if scen_13_student and scen_13_section:
                 dist_db["enrollments"].append({"School_id": school_b, "Section_id": scen_13_section["Section_id"], "Student_id": scen_13_student["Student_id"]})
-                edge_case_report["Scenario 13 (Student Section/School Mismatch)"].append(f"Student_id: {scen_13_student['Student_id']} (Home: {school_a}, Section: {scen_13_section['Section_id']} at {school_b})")
+                edge_case_report["Scenario 13 (Student Section/School Mismatch)"].append(f"Student_id: {scen_13_student['Student_id']} into Section: {scen_13_section['Section_id']}")
 
-            # Scenario 14: Teacher Section/School Mismatch
             scen_14_teacher = next((t for t in dist_db["teachers"] if t["School_id"] == school_a and t["Teacher_id"] != scen_1_teacher.get("Teacher_id")), None)
             scen_14_section = next((sec for sec in dist_db["sections"] if sec["School_id"] == school_b and sec["Section_id"] != scen_13_section.get("Section_id")), None)
             if scen_14_teacher and scen_14_section:
                 scen_14_section["Teacher_id"] = scen_14_teacher["Teacher_id"]
-                edge_case_report["Scenario 14 (Teacher Section/School Mismatch)"].append(f"Teacher_id: {scen_14_teacher['Teacher_id']} (Home: {school_a}, Section: {scen_14_section['Section_id']} at {school_b})")
+                edge_case_report["Scenario 14 (Teacher Section/School Mismatch)"].append(f"Teacher_id: {scen_14_teacher['Teacher_id']} into Section: {scen_14_section['Section_id']}")
 
-            # Scenario 23: Split Schools / Annex Campuses
             scen_23_school = dist_db["schools"][-1]
             split_school_id = get_hex_id(6) if config["ID_MODE"] == 'alphanumeric' else get_sequential_id(base_id_seq, 99999)
             split_school = scen_23_school.copy()
             split_school["School_id"] = split_school_id
             split_school["School_name"] = scen_23_school["School_name"] + " - Annex"
             dist_db["schools"].append(split_school)
-            edge_case_report["Scenario 23 (Split Schools)"].append(f"Original: {scen_23_school['School_id']}, Split Annex: {split_school_id}")
+            edge_case_report["Scenario 23 (Split Schools)"].append(f"Split Annex: {split_school_id}")
 
-        # --- ENROLLMENT EDGE CASES ---
         if do_3_day and dist_db["enrollments"] and dist_db["students"]:
             scen_17_student = dist_db["students"][0]["Student_id"]
             dist_db["enrollments"] = [e for e in dist_db["enrollments"] if e["Student_id"] != scen_17_student]
@@ -367,7 +349,7 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
                 scen_28_student = dist_db["students"][-1]
                 scen_28_section = dist_db["sections"][0]
                 dist_db["enrollments"].append({"School_id": scen_28_section["School_id"], "Section_id": scen_28_section["Section_id"], "Student_id": scen_28_student["Student_id"]})
-                edge_case_report["Scenario 28 (Student/Section Grade Mismatch)"].append(f"Student: {scen_28_student['Student_id']} (Grade {scen_28_student['Grade']}) forced into Section: {scen_28_section['Section_id']} (Grade {scen_28_section['Grade']})")
+                edge_case_report["Scenario 28 (Student/Section Grade Mismatch)"].append(f"Student: {scen_28_student['Student_id']} forced into Section: {scen_28_section['Section_id']}")
 
         # --- 3-DAY ROTATION ENGINE ---
         if not do_3_day:
@@ -376,7 +358,9 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
             if status_callback: status_callback(f"Generating {dist_name} Day 1...")
             export_district_state(config, base_output_dir, dist_name, "Day_1", dist_db)
 
+            # ----- DAY 2 MUTATIONS -----
             if status_callback: status_callback(f"Generating {dist_name} Day 2...")
+            
             mia_student = dist_db["students"].pop(random.randint(0, len(dist_db["students"]) - 1))
             mia_student_enrollments = [e for e in dist_db["enrollments"] if e["Student_id"] == mia_student["Student_id"]]
             dist_db["enrollments"] = [e for e in dist_db["enrollments"] if e["Student_id"] != mia_student["Student_id"]]
@@ -387,26 +371,64 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
             dist_db["enrollments"] = [e for e in dist_db["enrollments"] if e["Section_id"] != mia_section["Section_id"]]
             edge_case_report["Scenario 16 (Section Deleted Day 2, Restored Day 3)"].append(f"Section_id: {mia_section['Section_id']}")
 
-            if dist_db["students"]:
+            if len(dist_db["students"]) > 5:
+                # Scenario 35
                 dist_db["students"][0]["Contact_sis_id"] = f"cont-{uuid.uuid4().hex[:8]}"
-                edge_case_report["Scenario 35 (Contact ID changes Day 2)"].append(f"Student_id: {dist_db['students'][0]['Student_id']} (Contact ID changed)")
+                edge_case_report["Scenario 35 (Contact ID changes Day 2)"].append(f"Student_id: {dist_db['students'][0]['Student_id']}")
+                # Scenario 7
+                dist_db["students"][2]["Username"] = dist_db["students"][2]["Username"] + "new"
+                edge_case_report["Scenario 7 (SFTP UN Overwrite)"].append(f"Student_id: {dist_db['students'][2]['Student_id']} (UN: {dist_db['students'][2]['Username']})")
+                # Scenario 30
+                old_30_id = dist_db["students"][3]["Student_id"]
+                dist_db["students"][3]["Student_id"] = f"NEW-{old_30_id}"
+                for e in dist_db["enrollments"]:
+                    if e["Student_id"] == old_30_id: e["Student_id"] = dist_db["students"][3]["Student_id"]
+                edge_case_report["Scenario 30 (SIS ID changes Day 2, reverts Day 3)"].append(f"Original ID: {old_30_id} -> New ID: NEW-{old_30_id}")
+                # Scenario 36
+                dist_db["students"][4]["Contact_type"] = "Neighbor"
+                edge_case_report["Scenario 36 (Contact type inconsistent Day 2)"].append(f"Student_id: {dist_db['students'][4]['Student_id']} (Type: Neighbor)")
 
             export_district_state(config, base_output_dir, dist_name, "Day_2", dist_db)
 
+            # ----- DAY 3 MUTATIONS -----
             if status_callback: status_callback(f"Generating {dist_name} Day 3...")
+            
             dist_db["students"].append(mia_student)
             dist_db["sections"].append(mia_section)
             dist_db["enrollments"].extend(mia_student_enrollments)
             dist_db["enrollments"].extend(mia_section_enrollments)
 
             if len(dist_db["schools"]) > 1:
+                # Scenario 38
                 transfer_student = dist_db["students"][1]
                 old_school = transfer_student["School_id"]
                 new_school = next(s["School_id"] for s in dist_db["schools"] if s["School_id"] != old_school)
                 for r in dist_db["students"]:
                     if r["Student_id"] == transfer_student["Student_id"]: r["School_id"] = new_school
                 dist_db["enrollments"] = [e for e in dist_db["enrollments"] if e["Student_id"] != transfer_student["Student_id"]]
-                edge_case_report["Scenario 38 (Student Transfers School Day 3)"].append(f"Student_id: {transfer_student['Student_id']} (Moved from {old_school} -> {new_school})")
+                edge_case_report["Scenario 38 (Student Transfers School Day 3)"].append(f"Student_id: {transfer_student['Student_id']}")
+                
+                # Scenario 20
+                if len(dist_db["sections"]) > 2:
+                    scen_20_section = dist_db["sections"][2]
+                    old_sec_school = scen_20_section["School_id"]
+                    new_sec_school = next(s["School_id"] for s in dist_db["schools"] if s["School_id"] != old_sec_school)
+                    scen_20_section["School_id"] = new_sec_school
+                    edge_case_report["Scenario 20 (Section moves to new school Day 3)"].append(f"Section_id: {scen_20_section['Section_id']} ({old_sec_school} -> {new_sec_school})")
+
+                # Scenario 39
+                if len(dist_db["teachers"]) > 2:
+                    scen_39_teacher = dist_db["teachers"][2]
+                    old_t_school = scen_39_teacher["School_id"]
+                    new_t_school = next(s["School_id"] for s in dist_db["schools"] if s["School_id"] != old_t_school)
+                    scen_39_teacher["School_id"] = new_t_school
+                    edge_case_report["Scenario 39 (Teacher Transfers School Day 3)"].append(f"Teacher_id: {scen_39_teacher['Teacher_id']} ({old_t_school} -> {new_t_school})")
+
+            # Scenario 30 Revert
+            if len(dist_db["students"]) > 5:
+                dist_db["students"][3]["Student_id"] = old_30_id
+                for e in dist_db["enrollments"]:
+                    if e["Student_id"] == f"NEW-{old_30_id}": e["Student_id"] = old_30_id
 
             export_district_state(config, base_output_dir, dist_name, "Day_3", dist_db)
 
