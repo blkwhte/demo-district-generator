@@ -38,7 +38,7 @@ DEFAULTS = {
     "ATT_START_DATE": "2025-09-01", 
     "ATT_DAYS": 5, 
     "ATT_MODE": "Section",
-    "DO_3_DAY_ROTATION": False # <-- NEW TOGGLE
+    "DO_3_DAY_ROTATION": False
 }
 
 GENERIC_DISTRICT_NAMES = [ "MapleValley", "OakRiver", "SummitHeights", "PineCreek", "LibertyUnion", "Heritage", "PioneerValley", "GrandView", "Clearwater", "HopeSprings", "NorthStar", "GoldenPlains", "SilverLake", "WillowCreek", "Unity", "CedarRidge" ]
@@ -210,6 +210,17 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
     CORE_TERMS = generate_term_schedule(config["SCHOOL_START_YEAR"], config["NUM_TERMS"])
     do_3_day = config.get("DO_3_DAY_ROTATION", False)
     
+    # --- TRACK EDGE CASES FOR REPORT ---
+    edge_case_report = {
+        "Scenario 9 (Missing @ in Email)": [],
+        "Scenario 10 (Special characters in Name)": [],
+        "Scenario 12 (Short Name)": [],
+        "Scenario 15 (Student Deleted Day 2, Restored Day 3)": [],
+        "Scenario 16 (Section Deleted Day 2, Restored Day 3)": [],
+        "Scenario 35 (Contact ID changes Day 2)": [],
+        "Scenario 38 (Student Transfers School Day 3)": []
+    }
+    
     for i in range(config["NUM_DISTRICTS"]):
         dist_name = GENERIC_DISTRICT_NAMES[i % len(GENERIC_DISTRICT_NAMES)]
         if status_callback: status_callback(f"Generating {dist_name}...")
@@ -272,13 +283,21 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
                 # --- STATIC EDGE CASES (Day 1 anomalies) ---
                 if do_3_day:
                     r_val = random.random()
-                    if r_val < 0.02: l = "O'Connor" # Scenario 10
-                    elif r_val < 0.04: l = "Nuñez"  # Scenario 10
-                    elif r_val < 0.06: l = "Li"     # Scenario 12
+                    if r_val < 0.02: 
+                        l = "O'Connor" # Scenario 10
+                        edge_case_report["Scenario 10 (Special characters in Name)"].append(f"Student_id: {stu_id}")
+                    elif r_val < 0.04: 
+                        l = "Nuñez"  # Scenario 10
+                        edge_case_report["Scenario 10 (Special characters in Name)"].append(f"Student_id: {stu_id}")
+                    elif r_val < 0.06: 
+                        l = "Li"     # Scenario 12
+                        edge_case_report["Scenario 12 (Short Name)"].append(f"Student_id: {stu_id}")
                 
                 uname, email = generate_email_username(f, l, current_domain, config["USERNAME_FMT"])
                 
-                if do_3_day and random.random() < 0.01: email = email.replace("@", "") # Scenario 9
+                if do_3_day and random.random() < 0.01: 
+                    email = email.replace("@", "") # Scenario 9
+                    edge_case_report["Scenario 9 (Missing @ in Email)"].append(f"Student_id: {stu_id}")
                 
                 s_grade = random.choice(grade_list)
                 has_disability = "Y" if random.random() < config["PROB_DISABILITY"] else "N"
@@ -328,15 +347,18 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
             mia_student = dist_db["students"].pop(random.randint(0, len(dist_db["students"]) - 1))
             mia_student_enrollments = [e for e in dist_db["enrollments"] if e["Student_id"] == mia_student["Student_id"]]
             dist_db["enrollments"] = [e for e in dist_db["enrollments"] if e["Student_id"] != mia_student["Student_id"]]
+            edge_case_report["Scenario 15 (Student Deleted Day 2, Restored Day 3)"].append(f"Student_id: {mia_student['Student_id']}")
             
             # Scenario 16: Section removed on Day 2
             mia_section = dist_db["sections"].pop(random.randint(0, len(dist_db["sections"]) - 1))
             mia_section_enrollments = [e for e in dist_db["enrollments"] if e["Section_id"] == mia_section["Section_id"]]
             dist_db["enrollments"] = [e for e in dist_db["enrollments"] if e["Section_id"] != mia_section["Section_id"]]
+            edge_case_report["Scenario 16 (Section Deleted Day 2, Restored Day 3)"].append(f"Section_id: {mia_section['Section_id']}")
 
             # Scenario 35: Student contact ID changes Day over Day
             if dist_db["students"]:
                 dist_db["students"][0]["Contact_sis_id"] = f"cont-{uuid.uuid4().hex[:8]}"
+                edge_case_report["Scenario 35 (Contact ID changes Day 2)"].append(f"Student_id: {dist_db['students'][0]['Student_id']} (Contact ID changed)")
 
             export_district_state(config, base_output_dir, dist_name, "Day_2", dist_db)
 
@@ -360,7 +382,23 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
                     if r["Student_id"] == transfer_student["Student_id"]:
                         r["School_id"] = new_school
                 dist_db["enrollments"] = [e for e in dist_db["enrollments"] if e["Student_id"] != transfer_student["Student_id"]]
+                
+                edge_case_report["Scenario 38 (Student Transfers School Day 3)"].append(f"Student_id: {transfer_student['Student_id']} (Moved from {old_school} -> {new_school})")
 
             export_district_state(config, base_output_dir, dist_name, "Day_3", dist_db)
+
+        # --- WRITE THE EDGE CASE REPORT ---
+        if do_3_day:
+            report_path = os.path.join(base_output_dir, f"{dist_name}_edge_cases_report.txt")
+            with open(report_path, "w") as f:
+                f.write(f"CLEVER DEMO DISTRICT - EDGE CASES REPORT: {dist_name}\n")
+                f.write("=========================================================\n\n")
+                for scenario, ids in edge_case_report.items():
+                    f.write(f"{scenario}:\n")
+                    if not ids:
+                        f.write("  None generated in this run.\n")
+                    for item in ids:
+                        f.write(f"  - {item}\n")
+                    f.write("\n")
 
         if progress_callback: progress_callback((i + 1) / config["NUM_DISTRICTS"])
