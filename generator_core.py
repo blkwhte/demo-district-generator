@@ -393,7 +393,7 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
                         for s in random.sample(avail, k=min(random.randint(10, 20), len(avail))):
                             chunk_enrollments.append({"School_id": school_id, "Section_id": sec['id'], "Student_id": s['Student_id']})
 
-# --- 4. GENERATE ATTENDANCE ---
+            # --- 4. GENERATE ATTENDANCE (Strictly Absent/Tardy per Clever Spec) ---
             if config["DO_ATTENDANCE"]:
                 try:
                     start_date = datetime.datetime.strptime(config["ATT_START_DATE"], "%Y-%m-%d")
@@ -403,18 +403,21 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
                 att_days = parse_count(config["ATT_DAYS"])
                 att_mode = config["ATT_MODE"].lower()
                 
-                statuses = ["Present", "Absent", "Tardy"]
-                weights = [0.90, 0.06, 0.04]
+                # Clever strict enum values
+                statuses = ["Absent", "Tardy"]
+                weights = [0.60, 0.40] # 60% of exceptions are absences, 40% are tardies
                 
                 for day_offset in range(att_days):
                     current_date = (start_date + datetime.timedelta(days=day_offset)).strftime("%Y-%m-%d")
                     
                     if att_mode == "section":
-                        for e in chunk_enrollments:
+                        # Pick ~5% of enrollments to be absent/tardy
+                        daily_exceptions = random.sample(chunk_enrollments, k=int(len(chunk_enrollments) * 0.05))
+                        for e in daily_exceptions:
                             status = random.choices(statuses, weights=weights)[0]
                             chunk_attendance.append({
                                 "Attendance_id": f"ATT-{uuid.uuid4().hex[:8]}",
-                                "School_id": school_id,
+                                "School_id": school_id, 
                                 "Student_id": e["Student_id"],
                                 "Section_id": e["Section_id"],
                                 "Attendance_date": current_date,
@@ -423,12 +426,11 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
                                 "Excuse_code": "ILL" if status == "Absent" and random.random() < 0.5 else ""
                             })
                     else: # daily mode
-                        # Clever recommends using distinct students for Daily attendance rather than section mapping
-                        seen_daily_students = set()
-                        for s in chunk_students:
-                            if s["Student_id"] in seen_daily_students: continue
-                            seen_daily_students.add(s["Student_id"])
-                            
+                        # Grab a unique list of students for the school
+                        unique_students = list({s["Student_id"]: s for s in chunk_students}.values())
+                        # Pick ~5% of students to be absent/tardy for the whole day
+                        daily_exceptions = random.sample(unique_students, k=max(1, int(len(unique_students) * 0.05)))
+                        for s in daily_exceptions:
                             status = random.choices(statuses, weights=weights)[0]
                             chunk_attendance.append({
                                 "Attendance_id": f"ATT-{uuid.uuid4().hex[:8]}",
@@ -440,6 +442,7 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
                                 "Attendance_type": "daily",
                                 "Excuse_code": "ILL" if status == "Absent" and random.random() < 0.5 else ""
                             })
+
             if s_idx == 0:
                  chunk_staff.insert(0, { "School_id": school_id, "Staff_id": get_hex_id(7) if config["ID_MODE"] == 'alphanumeric' else str(base_id_seq + 99999), "Staff_email": f"admin@{current_domain}", "First_name": "System", "Last_name": "Admin", "Department": "Central", "Title": "Admin" })
 

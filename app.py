@@ -1,6 +1,7 @@
 import streamlit as st
 import os
 import shutil
+import datetime  # <-- Added to support the date picker
 from generator_core import DEFAULTS, run_generation
 
 st.set_page_config(page_title="Clever Demo Generator", page_icon="🏫")
@@ -15,6 +16,22 @@ with st.sidebar:
     config["SCHOOLS_PER_DISTRICT"] = st.number_input("Schools per District", min_value=1, value=DEFAULTS["SCHOOLS_PER_DISTRICT"])
     config["ID_MODE"] = st.selectbox("ID Mode", ["alphanumeric", "sequential"], index=0)
     config["OUTPUT_SCHEMA"] = st.selectbox("Schema", ["standard", "anyschool", "both"], index=0)
+
+    # --- NEW ATTENDANCE SECTION ---
+    st.markdown("---")
+    st.header("Attendance Data")
+    config["DO_ATTENDANCE"] = st.checkbox("Generate Attendance Data", value=DEFAULTS.get("DO_ATTENDANCE", False))
+    
+    if config["DO_ATTENDANCE"]:
+        # Show inputs if checked, and save directly to the config dict
+        config["ATT_START_DATE"] = st.date_input("Start Date", value=datetime.date(2025, 9, 1)).strftime("%Y-%m-%d")
+        config["ATT_DAYS"] = st.number_input("Number of Days", min_value=1, max_value=180, value=DEFAULTS.get("ATT_DAYS", 5))
+        config["ATT_MODE"] = st.selectbox("Attendance Mode", options=["Section", "Daily"], index=0)
+    else:
+        # Fallback config so the generator core doesn't break if unchecked
+        config["ATT_START_DATE"] = "2025-09-01"
+        config["ATT_DAYS"] = 5
+        config["ATT_MODE"] = "Section"
 
 col1, col2 = st.columns(2)
 with col1:
