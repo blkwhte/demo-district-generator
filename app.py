@@ -1,8 +1,8 @@
 import streamlit as st
 import os
 import shutil
-import datetime  # <-- Added to support the date picker
-from generator_core import DEFAULTS, run_generation
+import datetime
+from generator_core import DEFAULTS, EDGE_CASE_REGISTRY, STATIC_CASES, THREE_DAY_CASES, run_generation
 
 st.set_page_config(page_title="Clever Demo Generator", page_icon="🏫")
 st.title("🏫 Clever Demo District Generator")
@@ -16,22 +16,64 @@ with st.sidebar:
     config["SCHOOLS_PER_DISTRICT"] = st.number_input("Schools per District", min_value=1, value=DEFAULTS["SCHOOLS_PER_DISTRICT"])
     config["ID_MODE"] = st.selectbox("ID Mode", ["alphanumeric", "sequential"], index=0)
     config["OUTPUT_SCHEMA"] = st.selectbox("Schema", ["standard", "anyschool", "both"], index=0)
+
+    # --- EDGE CASES ---
     st.markdown("---")
     st.header("Edge Cases")
-    config["DO_3_DAY_ROTATION"] = st.checkbox("Generate 3-Day Event Rotation", value=False)
+    st.caption("Select the scenarios you want included in the generated dataset.")
 
-    # --- NEW ATTENDANCE SECTION ---
+    selected_edge_cases = []
+
+    # Static scenarios
+    with st.expander("📋 Static Scenarios (Single-Day)", expanded=False):
+        select_all_static = st.checkbox("Select All Static", key="select_all_static")
+        st.markdown("---")
+        for ec in STATIC_CASES:
+            default_val = select_all_static
+            checked = st.checkbox(
+                f"**Sc {ec['number']}** — {ec['label']}",
+                value=default_val,
+                help=ec["description"],
+                key=ec["key"]
+            )
+            if checked:
+                selected_edge_cases.append(ec["key"])
+
+    # 3-Day rotation scenarios
+    with st.expander("🔄 3-Day Rotation Scenarios", expanded=False):
+        st.info("Enabling any of these will automatically generate Day 1, Day 2, and Day 3 output folders.", icon="ℹ️")
+        select_all_3day = st.checkbox("Select All 3-Day", key="select_all_3day")
+        st.markdown("---")
+        for ec in THREE_DAY_CASES:
+            default_val = select_all_3day
+            checked = st.checkbox(
+                f"**Sc {ec['number']}** — {ec['label']}",
+                value=default_val,
+                help=ec["description"],
+                key=ec["key"]
+            )
+            if checked:
+                selected_edge_cases.append(ec["key"])
+
+    config["EDGE_CASES"] = selected_edge_cases
+
+    # Show a summary of selected count
+    if selected_edge_cases:
+        needs_3day = any(ec["key"] in selected_edge_cases for ec in THREE_DAY_CASES)
+        st.success(f"{len(selected_edge_cases)} scenario(s) selected" + (" · 3-day output enabled" if needs_3day else ""))
+    else:
+        st.caption("No edge cases selected — clean dataset will be generated.")
+
+    # --- ATTENDANCE ---
     st.markdown("---")
     st.header("Attendance Data")
     config["DO_ATTENDANCE"] = st.checkbox("Generate Attendance Data", value=DEFAULTS.get("DO_ATTENDANCE", False))
-    
+
     if config["DO_ATTENDANCE"]:
-        # Show inputs if checked, and save directly to the config dict
         config["ATT_START_DATE"] = st.date_input("Start Date", value=datetime.date(2025, 9, 1)).strftime("%Y-%m-%d")
         config["ATT_DAYS"] = st.number_input("Number of Days", min_value=1, max_value=180, value=DEFAULTS.get("ATT_DAYS", 5))
         config["ATT_MODE"] = st.selectbox("Attendance Mode", options=["Section", "Daily"], index=0)
     else:
-        # Fallback config so the generator core doesn't break if unchecked
         config["ATT_START_DATE"] = "2025-09-01"
         config["ATT_DAYS"] = 5
         config["ATT_MODE"] = "Section"
@@ -65,19 +107,17 @@ with st.expander("Advanced Settings"):
 if st.button("Generate Data", type="primary"):
     base_output_dir = 'district_data_output'
     if os.path.exists(base_output_dir): shutil.rmtree(base_output_dir)
-    
+
     progress_bar = st.progress(0)
     status_text = st.empty()
 
-    # Define how the core updates Streamlit's UI
     def update_status(msg): status_text.text(msg)
     def update_progress(val): progress_bar.progress(val)
 
-    # Trigger the Brain
     run_generation(config, base_output_dir, status_callback=update_status, progress_callback=update_progress)
 
     status_text.success("Generation Complete! Creating Archive...")
     shutil.make_archive(base_output_dir, 'zip', base_output_dir)
-    
+
     with open(f"{base_output_dir}.zip", "rb") as fp:
         st.download_button(label="Download Data (ZIP)", data=fp, file_name="district_data_output.zip", mime="application/zip")
