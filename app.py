@@ -17,53 +17,6 @@ with st.sidebar:
     config["ID_MODE"] = st.selectbox("ID Mode", ["alphanumeric", "sequential"], index=0)
     config["OUTPUT_SCHEMA"] = st.selectbox("Schema", ["standard", "anyschool", "both"], index=0)
 
-    # --- EDGE CASES ---
-    st.markdown("---")
-    st.header("Edge Cases")
-    st.caption("Select the scenarios you want included in the generated dataset.")
-
-    selected_edge_cases = []
-
-    # Static scenarios
-    with st.expander("📋 Static Scenarios (Single-Day)", expanded=False):
-        select_all_static = st.checkbox("Select All Static", key="select_all_static")
-        st.markdown("---")
-        for ec in STATIC_CASES:
-            default_val = select_all_static
-            checked = st.checkbox(
-                f"**Sc {ec['number']}** — {ec['label']}",
-                value=default_val,
-                help=ec["description"],
-                key=ec["key"]
-            )
-            if checked:
-                selected_edge_cases.append(ec["key"])
-
-    # 3-Day rotation scenarios
-    with st.expander("🔄 3-Day Rotation Scenarios", expanded=False):
-        st.info("Enabling any of these will automatically generate Day 1, Day 2, and Day 3 output folders.", icon="ℹ️")
-        select_all_3day = st.checkbox("Select All 3-Day", key="select_all_3day")
-        st.markdown("---")
-        for ec in THREE_DAY_CASES:
-            default_val = select_all_3day
-            checked = st.checkbox(
-                f"**Sc {ec['number']}** — {ec['label']}",
-                value=default_val,
-                help=ec["description"],
-                key=ec["key"]
-            )
-            if checked:
-                selected_edge_cases.append(ec["key"])
-
-    config["EDGE_CASES"] = selected_edge_cases
-
-    # Show a summary of selected count
-    if selected_edge_cases:
-        needs_3day = any(ec["key"] in selected_edge_cases for ec in THREE_DAY_CASES)
-        st.success(f"{len(selected_edge_cases)} scenario(s) selected" + (" · 3-day output enabled" if needs_3day else ""))
-    else:
-        st.caption("No edge cases selected — clean dataset will be generated.")
-
     # --- ATTENDANCE ---
     st.markdown("---")
     st.header("Attendance Data")
@@ -102,6 +55,42 @@ with st.expander("Advanced Settings"):
     config["USERNAME_FMT"] = st.selectbox("Username Format", ["first.last", "f.last", "f_last", "flast"], index=0)
     config["DO_CONTACTS"] = st.checkbox("Contacts", value=DEFAULTS["DO_CONTACTS"])
     config["DO_EXTENSIONS"] = st.checkbox("Extensions", value=DEFAULTS["DO_EXTENSIONS"])
+
+# --- EDGE CASES ---
+selected_edge_cases = []
+
+with st.expander("📋 Edge Cases — Static Scenarios (Single-Day)", expanded=False):
+    select_all_static = st.checkbox("Select All Static", key="select_all_static")
+    st.markdown("---")
+    for ec in STATIC_CASES:
+        checked = st.checkbox(
+            f"**Sc {ec['number']}** — {ec['label']}",
+            value=select_all_static,
+            help=ec["description"],
+            key=ec["key"]
+        )
+        if checked:
+            selected_edge_cases.append(ec["key"])
+
+with st.expander("🔄 Edge Cases — 3-Day Rotation Scenarios", expanded=False):
+    st.info("Enabling any of these will automatically generate Day 1, Day 2, and Day 3 output folders.", icon="ℹ️")
+    select_all_3day = st.checkbox("Select All 3-Day", key="select_all_3day")
+    st.markdown("---")
+    for ec in THREE_DAY_CASES:
+        checked = st.checkbox(
+            f"**Sc {ec['number']}** — {ec['label']}",
+            value=select_all_3day,
+            help=ec["description"],
+            key=ec["key"]
+        )
+        if checked:
+            selected_edge_cases.append(ec["key"])
+
+config["EDGE_CASES"] = selected_edge_cases
+
+if selected_edge_cases:
+    needs_3day = any(ec["key"] in selected_edge_cases for ec in THREE_DAY_CASES)
+    st.success(f"{len(selected_edge_cases)} edge case scenario(s) selected" + (" · 3-day output enabled" if needs_3day else ""))
 
 # --- EXECUTION ---
 if st.button("Generate Data", type="primary"):
