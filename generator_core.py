@@ -251,6 +251,36 @@ EDGE_CASE_REGISTRY = [
         "description": "On Day 3, a teacher's School_id is changed to a different school.",
         "requires_3_day": True
     },
+    {
+        "key": "sc_35", "number": 35,
+        "label": "Teacher with No Student Mapping",
+        "description": "One teacher is given sections that receive zero enrollments, so no students map to them.",
+        "requires_3_day": False
+    },
+    {
+        "key": "sc_36", "number": 36,
+        "label": "Student Mapped to Only One Teacher",
+        "description": "One student is enrolled exclusively in sections belonging to a single teacher.",
+        "requires_3_day": False
+    },
+    {
+        "key": "sc_37", "number": 37,
+        "label": "Teachers Spanning Same and Different Schools",
+        "description": "Two teachers are duplicated into a second school, creating contrast between single-school and multi-school teachers in the same dataset.",
+        "requires_3_day": False
+    },
+    {
+        "key": "sc_38", "number": 38,
+        "label": "Section with Large Enrollment (50+ Students)",
+        "description": "One section is force-enrolled with 50 students to test handling of oversized rosters.",
+        "requires_3_day": False
+    },
+    {
+        "key": "sc_39", "number": 39,
+        "label": "Section with Minimal Enrollment (1-2 Students)",
+        "description": "One section has its enrollment stripped down to exactly 1-2 students to test near-empty roster handling.",
+        "requires_3_day": False
+    },
 ]
 
 # Convenience lookups
@@ -598,6 +628,37 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
                     for s in random.sample(avail, k=min(parse_count(config["STUDENTS_PER_SECTION"]), len(avail))):
                         dist_db["enrollments"].append({"School_id": school_id, "Section_id": sec['id'], "Student_id": s['Student_id']})
 
+            # Sc 35: Teacher with No Student Mapping
+            # Done once (first school only): add a real teacher whose sections get zero enrollments.
+            if ec_active("sc_35") and s_idx == 0:
+                sc35_t_id = get_hex_id(7) if config["ID_MODE"] == 'alphanumeric' else get_sequential_id(base_id_seq, 88801)
+                sc35_uname, sc35_email = generate_email_username(fake.first_name(), fake.last_name(), current_domain, config["USERNAME_FMT"])
+                dist_db["teachers"].append({"School_id": school_id, "Teacher_id": sc35_t_id, "Teacher_number": sc35_t_id[:8], "State_teacher_id": f"{state_abbr}-{sc35_t_id[:8]}", "Teacher_email": sc35_email, "Username": sc35_uname, "First_name": fake.first_name(), "Last_name": fake.last_name(), "Title": "Teacher"})
+                for p_idx in range(config["SECTIONS_PER_TEACHER_TERM"]):
+                    sc35_sec_id = get_hex_id(8) if config["ID_MODE"] == 'alphanumeric' else f"SEC-{uuid.uuid4().hex[:8]}"
+                    s_grade = random.choice(grade_list)
+                    dist_db["sections"].append({"School_id": school_id, "Section_id": sc35_sec_id, "Teacher_id": sc35_t_id, "Teacher_2_id": "", "Name": f"{s_grade} - Math", "Grade": s_grade, "Subject": "Math", "Term_name": CORE_TERMS[0]["Term_name"], "Term_start": CORE_TERMS[0]["Term_start"], "Term_end": CORE_TERMS[0]["Term_end"], "Period": str(p_idx + 1)})
+                    # Intentionally no enrollments added for these sections
+                ec_report("sc_35", f"Teacher_id: {sc35_t_id} (school: {school_id}, {config['SECTIONS_PER_TEACHER_TERM']} sections, 0 enrollments)")
+
+            # Sc 36: Student Mapped to Only One Teacher
+            # Done once (first school only): create one student and enroll them only in sections
+            # belonging to a single teacher.
+            if ec_active("sc_36") and s_idx == 0 and school_teacher_ids:
+                sc36_teacher_id = school_teacher_ids[0]
+                sc36_teacher_sections = [sec for sec in dist_db["sections"] if sec["Teacher_id"] == sc36_teacher_id and sec["School_id"] == school_id]
+                if sc36_teacher_sections:
+                    sc36_stu_id = get_hex_id(6) if config["ID_MODE"] == 'alphanumeric' else get_sequential_id(base_id_seq, 88802)
+                    sc36_f, sc36_l = fake.first_name(), fake.last_name()
+                    sc36_uname, sc36_email = generate_email_username(sc36_f, sc36_l, current_domain, config["USERNAME_FMT"])
+                    sc36_grade = sc36_teacher_sections[0]["Grade"] if sc36_teacher_sections[0]["Grade"] in grade_list else grade_list[0]
+                    sc36_stu = {"School_id": school_id, "Student_id": sc36_stu_id, "Student_number": sc36_stu_id[:8], "State_id": f"{state_abbr}-{sc36_stu_id[:8]}", "Last_name": sc36_l, "First_name": sc36_f, "Grade": sc36_grade, "Gender": random.choice(['M', 'F']), "DOB": generate_dob(sc36_grade), "Student_email": sc36_email, "Username": sc36_uname, "Race": random.choices(CLEVER_RACE_VALUES, weights=RACE_WEIGHTS)[0], "Home_language": random.choices(LANG_KEYS, weights=LANG_WEIGHTS)[0], "IEP_status": "N", "FRL_status": "N", "ELL_status": "N", "Section_504_status": "N", "Gifted_status": "N", "Disability_status": "N", "Disability_type": "", "Disability_code": "", "ext.locker_number": "", "ext.bus_route": "", "Contact_relationship": "", "Contact_type": "", "Contact_name": "", "Contact_phone": "", "Contact_phone_type": "", "Contact_email": "", "Contact_sis_id": ""}
+                    dist_db["students"].append(sc36_stu)
+                    # Enroll only in this one teacher's sections
+                    for sec in sc36_teacher_sections:
+                        dist_db["enrollments"].append({"School_id": school_id, "Section_id": sec["Section_id"], "Student_id": sc36_stu_id})
+                    ec_report("sc_36", f"Student_id: {sc36_stu_id} enrolled only in sections of Teacher_id: {sc36_teacher_id} ({len(sc36_teacher_sections)} sections)")
+
             if s_idx == 0:
                 dist_db["staff"].insert(0, {"School_id": school_id, "Staff_id": get_hex_id(7) if config["ID_MODE"] == 'alphanumeric' else str(base_id_seq + 99999), "Staff_email": f"admin@{current_domain}", "First_name": "System", "Last_name": "Admin", "Department": "Central", "Title": "Admin"})
 
@@ -646,6 +707,43 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
                 split_school = scen_23_school.copy(); split_school["School_id"] = split_school_id; split_school["School_name"] = scen_23_school["School_name"] + " - Annex"
                 dist_db["schools"].append(split_school)
                 ec_report("sc_23", f"Split Annex: {split_school_id}")
+
+            # Sc 37: Teachers Spanning Same and Different Schools
+            # Duplicate 2 teachers from school_a into school_b so the dataset contains both
+            # single-school teachers (the majority) and multi-school teachers (these two).
+            if ec_active("sc_37"):
+                sc37_candidates = [t for t in dist_db["teachers"] if t["School_id"] == school_a][:2]
+                for t in sc37_candidates:
+                    t_copy = t.copy(); t_copy["School_id"] = school_b
+                    dist_db["teachers"].append(t_copy)
+                    ec_report("sc_37", f"Teacher_id: {t_copy['Teacher_id']} duplicated into school {school_b} (also in {school_a})")
+
+        # Sc 38: Section with Large Enrollment (50+ students)
+        # Pick one existing section and force-enroll 50 students from the same school into it.
+        if ec_active("sc_38") and dist_db["sections"] and dist_db["students"]:
+            sc38_section = dist_db["sections"][0]
+            sc38_school_id = sc38_section["School_id"]
+            sc38_pool = [s for s in dist_db["students"] if s["School_id"] == sc38_school_id]
+            sc38_targets = random.sample(sc38_pool, k=min(50, len(sc38_pool)))
+            existing_enrolled = {e["Student_id"] for e in dist_db["enrollments"] if e["Section_id"] == sc38_section["Section_id"]}
+            added = 0
+            for s in sc38_targets:
+                if s["Student_id"] not in existing_enrolled:
+                    dist_db["enrollments"].append({"School_id": sc38_school_id, "Section_id": sc38_section["Section_id"], "Student_id": s["Student_id"]})
+                    added += 1
+            final_count = len([e for e in dist_db["enrollments"] if e["Section_id"] == sc38_section["Section_id"]])
+            ec_report("sc_38", f"Section_id: {sc38_section['Section_id']} inflated to {final_count} enrollments")
+
+        # Sc 39: Section with Minimal Enrollment (1-2 students)
+        # Pick one section that has normal enrollments and strip it down to 1-2 students.
+        if ec_active("sc_39") and dist_db["sections"]:
+            sc39_section = dist_db["sections"][1] if len(dist_db["sections"]) > 1 else dist_db["sections"][0]
+            sc39_sec_id = sc39_section["Section_id"]
+            sc39_enrolled = [e for e in dist_db["enrollments"] if e["Section_id"] == sc39_sec_id]
+            keep_count = random.randint(1, 2)
+            keep = sc39_enrolled[:keep_count]
+            dist_db["enrollments"] = [e for e in dist_db["enrollments"] if e["Section_id"] != sc39_sec_id] + keep
+            ec_report("sc_39", f"Section_id: {sc39_sec_id} reduced to {len(keep)} enrollment(s)")
 
         if ec_active("sc_17") and dist_db["enrollments"] and dist_db["students"]:
             scen_17_student = dist_db["students"][0]["Student_id"]
