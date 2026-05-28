@@ -253,13 +253,13 @@ EDGE_CASE_REGISTRY = [
     },
     {
         "key": "sc_35", "number": 35,
-        "label": "Teacher with No Student Mapping",
-        "description": "One teacher is given sections that receive zero enrollments, so no students map to them.",
+        "label": "Teacher assigned to Section without Student Enrollments",
+        "description": "One teacher is given sections that receive zero enrollments, so no students are associated with them.",
         "requires_3_day": False
     },
     {
         "key": "sc_36", "number": 36,
-        "label": "Student Mapped to Only One Teacher",
+        "label": "Student associated with only one Teacher",
         "description": "One student is enrolled exclusively in sections belonging to a single teacher.",
         "requires_3_day": False
     },
