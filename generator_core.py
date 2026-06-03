@@ -443,29 +443,40 @@ def get_active_cases(config):
 
 def get_school_type_sequence(num_schools):
     """
-    Return a realistic, shuffled list of school types for a district.
-    Enforces the pyramid structure real districts use:
-      more Elementary than Middle, more Middle than High.
+    Return a realistic, shuffled list of school types for a district
+    that scales correctly at any size — from 1 to 1000+ schools.
 
-    Guarantees at least one of each core type when num_schools >= 3.
+    Target ratios (mirroring real US district composition):
+      Elementary : 60%  (KG-5)
+      Middle     : 20%  (6-8)
+      High       : 15%  (9-12)
+      Academy    :  5%  (KG-12)
+
+    Small-district guarantees:
       1  → [Elementary]
       2  → [Elementary, High]
       3  → [Elementary, Middle, High]
-      4  → [Elementary, Elementary, Middle, High]
-      5  → [Elementary, Elementary, Middle, High, Academy]
-      6+ → keeps prepending Elementaries
+      4+ → proportional allocation, always at least 1 of each core type
     """
     if num_schools == 1:
         return ["Elementary"]
     if num_schools == 2:
         return ["Elementary", "High"]
-    sequence = ["Elementary", "Middle", "High"]
-    extras = num_schools - 3
-    for i in range(extras):
-        if i == 0:
-            sequence.append("Academy")
-        else:
-            sequence.insert(0, "Elementary")
+    if num_schools == 3:
+        return random.sample(["Elementary", "Middle", "High"], 3)
+
+    # Proportional allocation — compute raw counts from target ratios
+    ratios = {"Elementary": 0.60, "Middle": 0.20, "High": 0.15, "Academy": 0.05}
+    counts = {t: max(1, round(num_schools * r)) for t, r in ratios.items()}
+
+    # Clamp total to exactly num_schools by adjusting the largest bucket
+    diff = num_schools - sum(counts.values())
+    counts["Elementary"] += diff   # Elementary absorbs any rounding remainder
+
+    # Build and shuffle the sequence
+    sequence = []
+    for school_type, count in counts.items():
+        sequence.extend([school_type] * count)
     random.shuffle(sequence)
     return sequence
 
