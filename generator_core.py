@@ -440,6 +440,35 @@ def get_active_cases(config):
     return selected, needs_3_day
 
 
+
+def get_school_type_sequence(num_schools):
+    """
+    Return a realistic, shuffled list of school types for a district.
+    Enforces the pyramid structure real districts use:
+      more Elementary than Middle, more Middle than High.
+
+    Guarantees at least one of each core type when num_schools >= 3.
+      1  → [Elementary]
+      2  → [Elementary, High]
+      3  → [Elementary, Middle, High]
+      4  → [Elementary, Elementary, Middle, High]
+      5  → [Elementary, Elementary, Middle, High, Academy]
+      6+ → keeps prepending Elementaries
+    """
+    if num_schools == 1:
+        return ["Elementary"]
+    if num_schools == 2:
+        return ["Elementary", "High"]
+    sequence = ["Elementary", "Middle", "High"]
+    extras = num_schools - 3
+    for i in range(extras):
+        if i == 0:
+            sequence.append("Academy")
+        else:
+            sequence.insert(0, "Elementary")
+    random.shuffle(sequence)
+    return sequence
+
 GENERIC_DISTRICT_NAMES = ["MapleValley", "OakRiver", "SummitHeights", "PineCreek", "LibertyUnion", "Heritage", "PioneerValley", "GrandView", "Clearwater", "HopeSprings", "NorthStar", "GoldenPlains", "SilverLake", "WillowCreek", "Unity", "CedarRidge"]
 STATE_MAPPINGS = {"C4a": ("California", "CA"), "T3x": ("Texas", "TX"), "N3y": ("New York", "NY"), "F1a": ("Florida", "FL"), "W2a": ("Washington", "WA"), "I1l": ("Illinois", "IL"), "C0l": ("Colorado", "CO"), "A7z": ("Arizona", "AZ"), "G4a": ("Georgia", "GA"), "M4a": ("Massachusetts", "MA")}
 STATE_KEYS = list(STATE_MAPPINGS.keys())
@@ -633,10 +662,14 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
         base_id_seq = (i + 1) * 100000
 
         dist_db = {"schools": [], "teachers": [], "staff": [], "students": [], "sections": [], "enrollments": [], "attendance": []}
+        _seen_student_ids = set()   # collision guard — scoped per district
+        _seen_section_ids = set()   # collision guard — scoped per district
+
+        school_type_sequence = get_school_type_sequence(config["SCHOOLS_PER_DISTRICT"])
 
         for s_idx in range(config["SCHOOLS_PER_DISTRICT"]):
             school_id = get_hex_id(6) if config["ID_MODE"] == 'alphanumeric' else get_sequential_id(base_id_seq, s_idx * 10000)
-            school_type = random.choice(['Elementary', 'Middle', 'High', 'Academy'])
+            school_type = school_type_sequence[s_idx]
             low, high = ('KG', '5') if 'Elementary' in school_type else ('6', '8') if 'Middle' in school_type else ('9', '12') if 'High' in school_type else ('KG', '12')
 
             prin_first, prin_last = census_full_name()
@@ -663,7 +696,13 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
                 for term in CORE_TERMS:
                     t_start, t_end = term["Term_start"], term["Term_end"]
                     for period_idx in range(config["SECTIONS_PER_TEACHER_TERM"]):
-                        sec_id = get_hex_id(8) if config["ID_MODE"] == 'alphanumeric' else f"SEC-{uuid.uuid4().hex[:8]}"
+                        if config["ID_MODE"] == 'alphanumeric':
+                            sec_id = get_hex_id(8)
+                            while sec_id in _seen_section_ids:
+                                sec_id = get_hex_id(8)
+                            _seen_section_ids.add(sec_id)
+                        else:
+                            sec_id = f"SEC-{uuid.uuid4().hex[:8]}"
                         s_grade, s_subj = random.choice(grade_list), random.choice(['Math', 'Science', 'ELA', 'History', 'Art', 'PE'])
                         sec_name = f"{s_grade} - {s_subj}"
                         assigned_teacher = t_id
@@ -698,7 +737,13 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
             estimated_students = int((len(school_section_ids) * parse_count(config["STUDENTS_PER_SECTION"])) / config["SECTIONS_PER_TEACHER_TERM"])
             school_student_objs = []
             for stu_idx in range(estimated_students):
-                stu_id = get_hex_id(6) if config["ID_MODE"] == 'alphanumeric' else get_sequential_id(base_id_seq, 200000 + (s_idx * 5000) + stu_idx)
+                if config["ID_MODE"] == 'alphanumeric':
+                    stu_id = get_hex_id(6)
+                    while stu_id in _seen_student_ids:
+                        stu_id = get_hex_id(6)
+                    _seen_student_ids.add(stu_id)
+                else:
+                    stu_id = get_sequential_id(base_id_seq, 200000 + (s_idx * 5000) + stu_idx)
                 f, l, s_grade = census_first_name(), census_last_name(), random.choice(grade_list)
 
                 # Student name / id edge cases
