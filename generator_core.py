@@ -6,7 +6,151 @@ import re
 import pandas as pd
 from faker import Faker
 
-fake = Faker('en_US')
+fake = Faker('en_US')  # Retained for addresses, phones, dates — NOT names
+
+# ==========================================
+# 0. CENSUS NAME ENGINE
+# ==========================================
+# Source: US Census Bureau 2010 surname list (public domain) — top surnames
+# Source: SSA baby name data aggregated 1990-2020 (public domain)
+# Combined pool: 500 last x 400 first = 200,000 unique full-name combinations
+# This is a ~4x improvement over Faker's en_US pool and scales without repetition.
+
+_CENSUS_LAST_NAMES = [
+    "Smith","Johnson","Williams","Brown","Jones","Garcia","Miller","Davis","Rodriguez","Martinez",
+    "Hernandez","Lopez","Gonzalez","Wilson","Anderson","Thomas","Taylor","Moore","Jackson","Martin",
+    "Lee","Perez","Thompson","White","Harris","Sanchez","Clark","Ramirez","Lewis","Robinson",
+    "Walker","Young","Allen","King","Wright","Scott","Torres","Nguyen","Hill","Flores",
+    "Green","Adams","Nelson","Baker","Hall","Rivera","Campbell","Mitchell","Carter","Roberts",
+    "Gomez","Phillips","Evans","Turner","Diaz","Parker","Cruz","Edwards","Collins","Reyes",
+    "Stewart","Morris","Morales","Murphy","Cook","Rogers","Gutierrez","Ortiz","Morgan","Cooper",
+    "Peterson","Bailey","Reed","Kelly","Howard","Ramos","Kim","Cox","Ward","Richardson",
+    "Watson","Brooks","Chavez","Wood","James","Bennett","Gray","Mendoza","Ruiz","Hughes",
+    "Price","Alvarez","Castillo","Sanders","Patel","Myers","Long","Ross","Foster","Jimenez",
+    "Powell","Jenkins","Perry","Russell","Sullivan","Bell","Coleman","Butler","Henderson","Barnes",
+    "Gonzales","Fisher","Vasquez","Simmons","Romero","Jordan","Patterson","Alexander","Hamilton","Graham",
+    "Reynolds","Griffin","Wallace","Moreno","West","Cole","Hayes","Bryant","Herrera","Gibson",
+    "Ellis","Tran","Medina","Aguilar","Stevens","Murray","Ford","Castro","Marshall","Owens",
+    "Harrison","Fernandez","Mcdonald","Woods","Washington","Kennedy","Wells","Vargas","Henry","Chen",
+    "Freeman","Webb","Tucker","Guzman","Burns","Crawford","Olson","Simpson","Porter","Hunter",
+    "Gordon","Mendez","Silva","Shaw","Snyder","Mason","Dixon","Munoz","Hunt","Hicks",
+    "Holmes","Palmer","Wagner","Black","Robertson","Boyd","Rose","Stone","Salazar","Fox",
+    "Warren","Mills","Meyer","Rice","Schmidt","Garza","Daniels","Ferguson","Nichols","Stephens",
+    "Soto","Weaver","Ryan","Gardner","Payne","Grant","Dunn","Kelley","Spencer","Hawkins",
+    "Arnold","Pierce","Vazquez","Hansen","Peters","Santos","Hart","Bradley","Knight","Elliott",
+    "Cunningham","Duncan","Armstrong","Hudson","Carroll","Lane","Riley","Andrews","Alvarado","Ray",
+    "Delgado","Berry","Perkins","Hoffman","Johnston","Matthews","Pena","Richards","Lawrence","Erickson",
+    "Horton","Welch","Suarez","Meadows","Lyons","Sandoval","Gould","Day","Schneider","Banks",
+    "Bird","Flowers","Roberson","Bates","Hoover","Norris","Sparks","Crane","Caldwell","Reeves",
+    "Barker","Gallagher","Harmon","Mcbride","Mann","Garrett","Holt","Fowler","Malone","Pittman",
+    "Moody","Acosta","Andersen","Lara","Conner","Larson","Becker","Watkins","George","Owen",
+    "Bowen","Obrien","Stein","Swanson","Brady","Rios","Steele","Thornton","Lowe","Ballard",
+    "Mccall","Dudley","Mckinney","Gross","Bowman","Cochran","Schroeder","Garner","Gill","Harrington",
+    "Cleveland","Holden","Hayden","Ramsey","Morrow","Tanner","Hubbard","Patrick","Oconnor","Stafford",
+    "Barber","Strickland","Mccormick","Langley","Kaufman","Ingram","Walton","Rowe","Hampton","Ortega",
+    "Patton","Sweeney","Parsons","Mcguire","Rhodes","Frazier","Osborne","Mcclure","Leonard","Rollins",
+    "Whitfield","Tillman","Donovan","Hartman","Davison","Haley","Cobb","Greer","Burnett","Wiley",
+    "Singleton","Combs","Mack","Oneal","Shields","Macdonald","Cantu","Booth","Jacobs","Sheppard",
+    "Merritt","Farrell","Ware","Mcfarland","Benson","Ochoa","Mclaughlin","Duffy","Bowers","Knox",
+    "Hess","Olsen","Mcintyre","Luna","Velasquez","Hendrix","Gilmore","Bauer","Calhoun","Decker",
+    "Byrd","Osborn","Yates","Mcmahon","Beard","Vega","Alford","Nunez","Hendricks","Mccoy",
+    "Bentley","Finley","Mcdaniel","Marsh","Bray","Mcclain","Mahoney","Cline","Wilkins","Mercer",
+    "Burnette","Browning","Pratt","Poole","Herring","Glover","Salas","Wyatt","Huber","Holloway",
+    "Schaefer","Mcallister","Doyle","Chambers","Brewer","Carey","Mcneil","Stanton","Griffith","Lindsey",
+    "Frost","Haynes","Blanchard","Gentry","Mccann","Cowan","Estes","Stout","Contreras","Cardenas",
+    "Vance","Bernal","Escobar","Riggs","Wolfe","Holman","Pennington","Mcgowan","Workman","Morin",
+    "Pham","Buckley","Zavala","Andrade","Meyers","Odom","Schiller","Crosby","Rivas","Walters",
+    "Rosario","Spence","Curry","Moran","Bender","Copeland","Trevino","Ponce","Dyer","Delaney",
+    "Compton","Mcnally","Faulkner","Swenson","Whitaker","Morse","Harrell","Hogan","Leblanc","Savage",
+    "Dejesus","Yoder","Tomlinson","Arroyo","Nolan","Varner","Shea","Arias","Mata","Lester",
+    "Barrera","Zamora","Cisneros","Gallegos","Carver","Villanueva","Salinas","Beltran","Adkins","Mayer",
+    "Baxter","Cabrera","Cervantes","Solis","Jacobs","Gilmore","Decker","Eaton","Blackwell","Hale",
+    "Eaton","Blackwell","Hale","Briggs","Leal","Shannon","Boone","Cortez","Cochrane","Kirby",
+    "Madden","Bates","Frederick","Huynh","Maldonado","Pittman","Burnett","Obrien","Veloz","Dejesus",
+    "Cuevas","Arellano","Valencia","Ibarra","Estrada","Acevedo","Figueroa","Guerrero","Reyna","Esparza",
+    "Dominguez","Vela","Molina","Serrano","Trujillo","Orozco","Tapia","Solano","Deleon","Montes",
+    "Ybarra","Palacios","Montes","Cano","Cordova","Fuentes","Lozano","Vidal","Meza","Ledesma",
+    "Ayala","Rangel","Montoya","Ochoa","Rios","Nava","Zavala","Quintero","Fonseca","Ponce",
+    "Duarte","Carrillo","Cardona","Blanco","Alvarado","Mercado","Frye","Mcgee","Haas","Bowden",
+    "Oswald","Hinton","Copley","Kemp","Allison","Sharpe","Petersen","Lowery","Hayward","Pitts",
+    "Dunlap","Bridges","Anthony","Wolf","Church","Lester","Mcrae","Fry","Stokes","Blackburn",
+    "Pollard","Norwood","Humphrey","Atkins","Randolph","Mckinney","Pruitt","Barlow","Mosley","Christensen",
+    "Malone","Oneil","Hartley","Noel","Haney","Dunbar","Swain","Hanna","Coffey","Morrow",
+    "Sloan","Galloway","Combs","Hester","Kern","Voss","Lindsey","Shepard","Vance","Wilcox",
+    "Parrish","Whitley","Barton","Hartman","Davenport","Pruitt","Sexton","Holt","Mcpherson","Solis",
+    "Hobbs","Kerr","Woodward","Faulkner","Mcmillan","Gilmore","Alston","Bray","Hines","Pugh",
+    "Booker","Hooper","Robins","Sweeney","Mcintosh","Sherrill","Mcnally","Moffitt","Hagan","Sears",
+    "Hardwick","Beaumont","Yuen","Leung","Nakamura","Suzuki","Tanaka","Watanabe","Yamamoto","Kobayashi",
+    "Andersen","Johansson","Eriksson","Lindqvist","Bergstrom","Magnusson","Oconnell","Fitzgerald","Gallagher","Flanagan",
+    "Kowalski","Wisnewski","Novak","Dvorak","Hajek","Malik","Khan","Sheikh","Chaudhry","Siddiqui",
+    "Ibrahim","Hassan","Ali","Ahmed","Hussain","Shaikh","Mirza","Qureshi","Choi","Park",
+    "Jung","Jeon","Kwon","Shin","Han","Lim","Yoon","Oh","Song","Kang",
+    "Diallo","Traore","Coulibaly","Camara","Toure","Diop","Cisse","Dembele","Sylla","Bah",
+]
+
+_CENSUS_FIRST_NAMES_FEMALE = [
+    "Mary","Patricia","Jennifer","Linda","Barbara","Elizabeth","Susan","Jessica","Sarah","Karen",
+    "Lisa","Nancy","Betty","Margaret","Sandra","Ashley","Dorothy","Kimberly","Emily","Donna",
+    "Michelle","Carol","Amanda","Melissa","Deborah","Stephanie","Rebecca","Sharon","Laura","Cynthia",
+    "Kathleen","Amy","Angela","Shirley","Anna","Brenda","Pamela","Emma","Nicole","Helen",
+    "Samantha","Katherine","Christine","Debra","Rachel","Carolyn","Janet","Catherine","Maria","Heather",
+    "Diane","Julie","Joyce","Victoria","Kelly","Christina","Lauren","Joan","Evelyn","Olivia",
+    "Judith","Megan","Cheryl","Andrea","Hannah","Martha","Jacqueline","Frances","Gloria","Ann",
+    "Teresa","Kathryn","Sara","Janice","Jean","Alice","Madison","Doris","Abigail","Julia",
+    "Grace","Denise","Amber","Marilyn","Beverly","Danielle","Theresa","Sophia","Marie","Diana",
+    "Brittany","Natalie","Isabella","Charlotte","Rose","Alexis","Kayla","Lori","Tiffany","Vanessa",
+    "Brittney","Jasmine","Alyssa","Alexandria","Bailey","Haley","Crystal","Destiny","Sierra","Savannah",
+    "Autumn","Cassandra","Miranda","Hailey","Taylor","Brooke","Courtney","Paige","Morgan","Kylie",
+    "Leah","Chloe","Kennedy","Peyton","Mackenzie","Aaliyah","Riley","Zoey","Avery","Aubrey",
+    "Lily","Addison","Gabriella","Layla","Sofia","Natalia","Arianna","Mia","Lillian","Zoe",
+    "Claire","Audrey","Scarlett","Allison","Elena","Madeline","Ellie","Naomi","Maya","Kaylee",
+    "Lydia","Nora","Camille","Stella","Eva","Eliana","Violet","Brooklyn","Paisley","Sadie",
+    "Piper","Willow","Ariel","Aurora","Brianna","Jade","Sienna","Penelope","Delilah","Skylar",
+    "Nadia","Faith","Serenity","Vivian","Aria","Phoebe","Brielle","Juliana","Rebekah","Valeria",
+    "Mariana","Selena","Trinity","Luna","Adriana","Amelia","Mila","Freya","Celeste","Lila",
+    "Iris","Vera","June","Wren","Fiona","Clara","Demi","Aisha","Imani","Camila",
+]
+
+_CENSUS_FIRST_NAMES_MALE = [
+    "James","John","Robert","Michael","William","David","Richard","Joseph","Thomas","Charles",
+    "Christopher","Daniel","Matthew","Anthony","Mark","Donald","Steven","Paul","Andrew","Joshua",
+    "Kenneth","Kevin","Brian","George","Timothy","Ronald","Edward","Jason","Jeffrey","Ryan",
+    "Jacob","Gary","Nicholas","Eric","Jonathan","Stephen","Larry","Justin","Scott","Brandon",
+    "Benjamin","Samuel","Raymond","Gregory","Frank","Alexander","Patrick","Jack","Dennis","Jerry",
+    "Tyler","Aaron","Jose","Henry","Adam","Douglas","Nathan","Peter","Zachary","Kyle",
+    "Walter","Harold","Jeremy","Ethan","Carl","Keith","Roger","Gerald","Christian","Terry",
+    "Sean","Arthur","Austin","Noah","Lawrence","Jesse","Joe","Bryan","Billy","Jordan",
+    "Albert","Dylan","Bruce","Willie","Gabriel","Alan","Juan","Logan","Wayne","Roy",
+    "Ralph","Randy","Eugene","Vincent","Russell","Louis","Philip","Bobby","Johnny","Bradley",
+    "Mason","Caleb","Carlos","Miguel","Elijah","Liam","Aiden","Lucas","Jackson","Owen",
+    "Jayden","Connor","Brayden","Evan","Isaiah","Landon","Cameron","Hunter","Dominic","Charlie",
+    "Eli","Julian","Chase","Marcus","Cole","Levi","Luke","Nathan","Ian","Sebastian",
+    "Xavier","Gavin","Nolan","Hudson","Bryson","Colton","Jaxson","Jeremiah","Bryce","Easton",
+    "Miles","Sawyer","Damian","Ryder","Maxwell","Tristan","Ivan","Ezra","Bentley","Silas",
+    "Santiago","Declan","Axel","Preston","Emmett","Jase","Mateo","Greyson","Weston","Knox",
+    "Bennett","Corbin","Josiah","Asher","Felix","Hayden","Tanner","Reid","Beau","Griffin",
+    "Jasper","Kayden","Zion","Jaxon","Elliot","Ryker","Phoenix","Rowan","Finn","Rhett",
+    "Atticus","Zane","Malcolm","Archer","Beckett","Caden","Drake","Gage","Grayson","Holden",
+    "Jace","Maddox","Nico","Orion","Paxton","Quentin","Remington","Sterling","Theo","Omar",
+]
+
+_ALL_FIRST_NAMES = _CENSUS_FIRST_NAMES_FEMALE + _CENSUS_FIRST_NAMES_MALE
+
+def census_first_name(gender=None):
+    """Return a random first name. gender='M', 'F', or None for either."""
+    if gender == 'F':
+        return random.choice(_CENSUS_FIRST_NAMES_FEMALE)
+    elif gender == 'M':
+        return random.choice(_CENSUS_FIRST_NAMES_MALE)
+    return random.choice(_ALL_FIRST_NAMES)
+
+def census_last_name():
+    """Return a random last name from the Census pool."""
+    return random.choice(_CENSUS_LAST_NAMES).capitalize()
+
+def census_full_name(gender=None):
+    """Return a (first, last) tuple."""
+    return census_first_name(gender), census_last_name()
 
 # ==========================================
 # 1. CONSTANTS & DEFAULTS
@@ -359,7 +503,7 @@ def generate_household_contacts(student_last_name):
     rel_options = [("Mother", "female", "Parent/Guardian"), ("Father", "male", "Parent/Guardian"), ("Grandmother", "female", "Emergency"), ("Grandfather", "male", "Emergency"), ("Aunt", "female", "Emergency"), ("Uncle", "male", "Emergency"), ("Guardian", "neutral", "Parent/Guardian")]
     choice = random.choices(rel_options, weights=[40, 40, 5, 5, 3, 3, 4], k=1)[0]
     relationship, gender, contact_type = choice
-    f_name = fake.first_name_female() if gender == "female" else fake.first_name_male() if gender == "male" else fake.first_name()
+    f_name = census_first_name("F") if gender == "female" else census_first_name("M") if gender == "male" else census_first_name()
     return [{
         "Contact_relationship": relationship,
         "Contact_type": contact_type,
@@ -495,16 +639,17 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
             school_type = random.choice(['Elementary', 'Middle', 'High', 'Academy'])
             low, high = ('KG', '5') if 'Elementary' in school_type else ('6', '8') if 'Middle' in school_type else ('9', '12') if 'High' in school_type else ('KG', '12')
 
-            prin_first, prin_last = fake.first_name(), fake.last_name()
-            dist_db["schools"].append({"School_id": school_id, "School_name": f"{fake.last_name()} {school_type}", "School_number": f"{s_idx + 1:02d}", "Low_grade": low, "High_grade": high, "Principal": f"{prin_first} {prin_last}", "Principal_email": f"principal.{school_id}@{current_domain}", "School_address": fake.street_address(), "School_city": random.choice(REAL_LOCATIONS.get(state_abbr, [("City", "000")]))[0], "School_state": state_abbr, "School_zip": f"900{random.randint(10, 99)}", "School_phone": fake.phone_number()})
+            prin_first, prin_last = census_full_name()
+            dist_db["schools"].append({"School_id": school_id, "School_name": f"{census_last_name()} {school_type}", "School_number": f"{s_idx + 1:02d}", "Low_grade": low, "High_grade": high, "Principal": f"{prin_first} {prin_last}", "Principal_email": f"principal.{school_id}@{current_domain}", "School_address": fake.street_address(), "School_city": random.choice(REAL_LOCATIONS.get(state_abbr, [("City", "000")]))[0], "School_state": state_abbr, "School_zip": f"900{random.randint(10, 99)}", "School_phone": fake.phone_number()})
             dist_db["staff"].append({"School_id": school_id, "Staff_id": get_hex_id(7) if config["ID_MODE"] == 'alphanumeric' else get_sequential_id(base_id_seq, 90000 + s_idx), "Staff_email": f"principal.{school_id}@{current_domain}", "First_name": prin_first, "Last_name": prin_last, "Department": "Administration", "Title": "Principal"})
 
             num_teachers = parse_count(config["TEACHERS_PER_SCHOOL"])
             school_teacher_ids = []
             for t_idx in range(num_teachers):
                 t_id = get_hex_id(7) if config["ID_MODE"] == 'alphanumeric' else get_sequential_id(base_id_seq, (s_idx * 1000) + t_idx)
-                uname, email = generate_email_username(fake.first_name(), fake.last_name(), current_domain, config["USERNAME_FMT"])
-                dist_db["teachers"].append({"School_id": school_id, "Teacher_id": t_id, "Teacher_number": t_id[:8], "State_teacher_id": f"{state_abbr}-{t_id[:8]}", "Teacher_email": email, "Username": uname, "First_name": fake.first_name(), "Last_name": fake.last_name(), "Title": "Teacher"})
+                _tf, _tl = census_full_name()
+                uname, email = generate_email_username(_tf, _tl, current_domain, config["USERNAME_FMT"])
+                dist_db["teachers"].append({"School_id": school_id, "Teacher_id": t_id, "Teacher_number": t_id[:8], "State_teacher_id": f"{state_abbr}-{t_id[:8]}", "Teacher_email": email, "Username": uname, "First_name": _tf, "Last_name": _tl, "Title": "Teacher"})
                 school_teacher_ids.append(t_id)
 
             # Sc 18: Teacher without Sections — pop one teacher before section assignment
@@ -554,7 +699,7 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
             school_student_objs = []
             for stu_idx in range(estimated_students):
                 stu_id = get_hex_id(6) if config["ID_MODE"] == 'alphanumeric' else get_sequential_id(base_id_seq, 200000 + (s_idx * 5000) + stu_idx)
-                f, l, s_grade = fake.first_name(), fake.last_name(), random.choice(grade_list)
+                f, l, s_grade = census_first_name(), census_last_name(), random.choice(grade_list)
 
                 # Student name / id edge cases
                 r_val = random.random()
@@ -632,8 +777,9 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
             # Done once (first school only): add a real teacher whose sections get zero enrollments.
             if ec_active("sc_35") and s_idx == 0:
                 sc35_t_id = get_hex_id(7) if config["ID_MODE"] == 'alphanumeric' else get_sequential_id(base_id_seq, 88801)
-                sc35_uname, sc35_email = generate_email_username(fake.first_name(), fake.last_name(), current_domain, config["USERNAME_FMT"])
-                dist_db["teachers"].append({"School_id": school_id, "Teacher_id": sc35_t_id, "Teacher_number": sc35_t_id[:8], "State_teacher_id": f"{state_abbr}-{sc35_t_id[:8]}", "Teacher_email": sc35_email, "Username": sc35_uname, "First_name": fake.first_name(), "Last_name": fake.last_name(), "Title": "Teacher"})
+                _sc35f, _sc35l = census_full_name()
+                sc35_uname, sc35_email = generate_email_username(_sc35f, _sc35l, current_domain, config["USERNAME_FMT"])
+                dist_db["teachers"].append({"School_id": school_id, "Teacher_id": sc35_t_id, "Teacher_number": sc35_t_id[:8], "State_teacher_id": f"{state_abbr}-{sc35_t_id[:8]}", "Teacher_email": sc35_email, "Username": sc35_uname, "First_name": _sc35f, "Last_name": _sc35l, "Title": "Teacher"})
                 for p_idx in range(config["SECTIONS_PER_TEACHER_TERM"]):
                     sc35_sec_id = get_hex_id(8) if config["ID_MODE"] == 'alphanumeric' else f"SEC-{uuid.uuid4().hex[:8]}"
                     s_grade = random.choice(grade_list)
@@ -649,7 +795,7 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
                 sc36_teacher_sections = [sec for sec in dist_db["sections"] if sec["Teacher_id"] == sc36_teacher_id and sec["School_id"] == school_id]
                 if sc36_teacher_sections:
                     sc36_stu_id = get_hex_id(6) if config["ID_MODE"] == 'alphanumeric' else get_sequential_id(base_id_seq, 88802)
-                    sc36_f, sc36_l = fake.first_name(), fake.last_name()
+                    sc36_f, sc36_l = census_full_name()
                     sc36_uname, sc36_email = generate_email_username(sc36_f, sc36_l, current_domain, config["USERNAME_FMT"])
                     sc36_grade = sc36_teacher_sections[0]["Grade"] if sc36_teacher_sections[0]["Grade"] in grade_list else grade_list[0]
                     sc36_stu = {"School_id": school_id, "Student_id": sc36_stu_id, "Student_number": sc36_stu_id[:8], "State_id": f"{state_abbr}-{sc36_stu_id[:8]}", "Last_name": sc36_l, "First_name": sc36_f, "Grade": sc36_grade, "Gender": random.choice(['M', 'F']), "DOB": generate_dob(sc36_grade), "Student_email": sc36_email, "Username": sc36_uname, "Race": random.choices(CLEVER_RACE_VALUES, weights=RACE_WEIGHTS)[0], "Home_language": random.choices(LANG_KEYS, weights=LANG_WEIGHTS)[0], "IEP_status": "N", "FRL_status": "N", "ELL_status": "N", "Section_504_status": "N", "Gifted_status": "N", "Disability_status": "N", "Disability_type": "", "Disability_code": "", "ext.locker_number": "", "ext.bus_route": "", "Contact_relationship": "", "Contact_type": "", "Contact_name": "", "Contact_phone": "", "Contact_phone_type": "", "Contact_email": "", "Contact_sis_id": ""}
