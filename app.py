@@ -45,7 +45,11 @@ with col2:
 with st.expander("Demographics Probabilities"):
     config["PROB_FRL"] = st.slider("Free/Reduced Lunch", 0.0, 1.0, DEFAULTS["PROB_FRL"])
     config["PROB_IEP"] = st.slider("IEP", 0.0, 1.0, DEFAULTS["PROB_IEP"])
-    config["PROB_ELL"] = st.slider("ELL", 0.0, 1.0, DEFAULTS["PROB_ELL"])
+    config["PROB_HISPANIC"] = st.slider(
+        "Hispanic/Latino",
+        0.0, 1.0, DEFAULTS["PROB_HISPANIC"],
+        help="Sets the share of students identified as Hispanic/Latino. This also drives two correlated fields: students with higher Hispanic/Latino prevalence will have proportionally more Spanish home-language speakers, and ELL status is derived from the combination of both — so raising this slider increases Spanish speakers and ELL students across the district."
+    )
     config["PROB_504"] = st.slider("504 Plan", 0.0, 1.0, DEFAULTS["PROB_504"])
     config["PROB_GIFTED"] = st.slider("Gifted", 0.0, 1.0, DEFAULTS["PROB_GIFTED"])
     config["PROB_DISABILITY"] = st.slider("Disability", 0.0, 1.0, DEFAULTS["PROB_DISABILITY"])

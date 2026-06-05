@@ -32,7 +32,7 @@ if not Confirm.ask("Apply ALL default settings?", default=False):
         from rich.prompt import FloatPrompt
         config["PROB_FRL"] = FloatPrompt.ask("Prob. FRL", default=DEFAULTS["PROB_FRL"])
         config["PROB_IEP"] = FloatPrompt.ask("Prob. IEP", default=DEFAULTS["PROB_IEP"])
-        config["PROB_ELL"] = FloatPrompt.ask("Prob. ELL", default=DEFAULTS["PROB_ELL"])
+        config["PROB_HISPANIC"] = FloatPrompt.ask("Prob. Hispanic/Latino (also drives Spanish home language and ELL)", default=DEFAULTS["PROB_HISPANIC"])
         config["PROB_504"] = FloatPrompt.ask("Prob. 504", default=DEFAULTS["PROB_504"])
         config["PROB_GIFTED"] = FloatPrompt.ask("Prob. Gifted", default=DEFAULTS["PROB_GIFTED"])
         config["PROB_DISABILITY"] = FloatPrompt.ask("Prob. Disability", default=DEFAULTS["PROB_DISABILITY"])
