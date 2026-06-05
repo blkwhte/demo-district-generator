@@ -420,7 +420,7 @@ def generate_household_contacts(student_last_name):
     }]
 
 # --- FILE STREAMING HELPERS ---
-def init_files(out_dir, schema):
+def init_files(out_dir, schema, do_attendance=False):
     HEADERS = {
         "schools": ["School_id", "School_name", "School_number", "Low_grade", "High_grade", "Principal", "Principal_email", "School_address", "School_city", "School_state", "School_zip", "School_phone"],
         "teachers": ["School_id", "Teacher_id", "Teacher_number", "State_teacher_id", "Teacher_email", "Username", "First_name", "Last_name", "Title"],
@@ -436,10 +436,14 @@ def init_files(out_dir, schema):
     if schema in ["standard", "both"]:
         std_dir = os.path.join(out_dir, "standard")
         os.makedirs(std_dir, exist_ok=True)
-        for k in ["schools", "teachers", "staff", "students", "sections", "enrollments", "attendance"]:
+        for k in ["schools", "teachers", "staff", "students", "sections", "enrollments"]:
             p = os.path.join(std_dir, f"{k}.csv")
             pd.DataFrame(columns=HEADERS[k]).to_csv(p, index=False)
             paths[f"std_{k}"] = p
+        if do_attendance:
+            p = os.path.join(std_dir, "attendance.csv")
+            pd.DataFrame(columns=HEADERS["attendance"]).to_csv(p, index=False)
+            paths["std_attendance"] = p
 
     if schema in ["anyschool", "both"]:
         as_dir = os.path.join(out_dir, "anyschool")
@@ -501,10 +505,12 @@ def transform_to_anyschool(students, teachers, staff, sections, enrollments, sch
 def export_district_state(config, base_dir, dist_name, folder_suffix, db):
     out_dir = os.path.join(base_dir, f"{dist_name}_{folder_suffix}")
     os.makedirs(out_dir, exist_ok=True)
-    file_paths = init_files(out_dir, config["OUTPUT_SCHEMA"])
+    file_paths = init_files(out_dir, config["OUTPUT_SCHEMA"], do_attendance=config.get("DO_ATTENDANCE", False))
     if "std_schools" in file_paths:
-        for data, key in [(db["schools"], "std_schools"), (db["teachers"], "std_teachers"), (db["staff"], "std_staff"), (db["students"], "std_students"), (db["sections"], "std_sections"), (db["enrollments"], "std_enrollments"), (db["attendance"], "std_attendance")]:
+        for data, key in [(db["schools"], "std_schools"), (db["teachers"], "std_teachers"), (db["staff"], "std_staff"), (db["students"], "std_students"), (db["sections"], "std_sections"), (db["enrollments"], "std_enrollments")]:
             append_data(data, file_paths[key])
+        if config.get("DO_ATTENDANCE", False) and "std_attendance" in file_paths:
+            append_data(db["attendance"], file_paths["std_attendance"])
     if "as_users" in file_paths:
         u_chunk, s_chunk = transform_to_anyschool(db["students"], db["teachers"], db["staff"], db["sections"], db["enrollments"], db["schools"])
         append_data(u_chunk, file_paths["as_users"])
