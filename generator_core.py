@@ -335,8 +335,32 @@ DISABILITY_CODES = list(DISABILITY_MAP.keys())
 # ==========================================
 # 3. HELPER FUNCTIONS
 # ==========================================
-def get_hex_id(length=6):
-    return uuid.uuid4().hex[:length]
+def get_hex_id(length=6, prefix=""):
+    """
+    Generate a random hex ID of the specified length with an optional prefix.
+    Prefix prevents Excel from misinterpreting hex strings as scientific notation
+    (e.g. bare '9e9554' → Excel renders as '9E+9554'). A letter prefix like 's-'
+    ensures the value is always treated as a string regardless of its hex digits.
+    ID space: 16^length (e.g. 6-char = 16,777,216 unique values per prefix).
+    """
+    return f"{prefix}{uuid.uuid4().hex[:length]}"
+
+# Typed ID generators — each entity type gets its own prefix.
+# This keeps IDs visually distinct, Excel-safe, and easy to identify at a glance.
+def make_school_id(mode, base=0, counter=0):
+    return f"sch-{uuid.uuid4().hex[:6]}" if mode == 'alphanumeric' else get_sequential_id(base, counter)
+
+def make_teacher_id(mode, base=0, counter=0):
+    return f"tch-{uuid.uuid4().hex[:7]}" if mode == 'alphanumeric' else get_sequential_id(base, counter)
+
+def make_student_id(mode, base=0, counter=0):
+    return f"stu-{uuid.uuid4().hex[:6]}" if mode == 'alphanumeric' else get_sequential_id(base, counter)
+
+def make_section_id(mode):
+    return f"sec-{uuid.uuid4().hex[:8]}" if mode == 'alphanumeric' else f"SEC-{uuid.uuid4().hex[:8]}"
+
+def make_staff_id(mode, base=0, counter=0):
+    return f"stf-{uuid.uuid4().hex[:7]}" if mode == 'alphanumeric' else get_sequential_id(base, counter)
 
 def get_sequential_id(base, counter):
     return str(base + counter)
@@ -514,20 +538,22 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
         base_id_seq = (i + 1) * 100000
 
         dist_db = {"schools": [], "teachers": [], "staff": [], "students": [], "sections": [], "enrollments": [], "attendance": []}
+        _seen_student_ids = set()   # collision guard — scoped per district
+        _seen_section_ids = set()   # collision guard — scoped per district
 
         for s_idx in range(config["SCHOOLS_PER_DISTRICT"]):
-            school_id = get_hex_id(6) if config["ID_MODE"] == 'alphanumeric' else get_sequential_id(base_id_seq, s_idx * 10000)
+            school_id = make_school_id(config["ID_MODE"], base_id_seq, s_idx * 10000)
             school_type = random.choice(['Elementary', 'Middle', 'High', 'Academy'])
             low, high = ('KG', '5') if 'Elementary' in school_type else ('6', '8') if 'Middle' in school_type else ('9', '12') if 'High' in school_type else ('KG', '12')
 
             prin_first, prin_last = fake.first_name(), fake.last_name()
             dist_db["schools"].append({"School_id": school_id, "School_name": f"{fake.last_name()} {school_type}", "School_number": f"{s_idx + 1:02d}", "Low_grade": low, "High_grade": high, "Principal": f"{prin_first} {prin_last}", "Principal_email": f"principal.{school_id}@{current_domain}", "School_address": fake.street_address(), "School_city": random.choice(REAL_LOCATIONS.get(state_abbr, [("City", "000")]))[0], "School_state": state_abbr, "School_zip": f"900{random.randint(10, 99)}", "School_phone": fake.phone_number()})
-            dist_db["staff"].append({"School_id": school_id, "Staff_id": get_hex_id(7) if config["ID_MODE"] == 'alphanumeric' else get_sequential_id(base_id_seq, 90000 + s_idx), "Staff_email": f"principal.{school_id}@{current_domain}", "First_name": prin_first, "Last_name": prin_last, "Department": "Administration", "Title": "Principal"})
+            dist_db["staff"].append({"School_id": school_id, "Staff_id": make_staff_id(config["ID_MODE"], base_id_seq, 90000 + s_idx), "Staff_email": f"principal.{school_id}@{current_domain}", "First_name": prin_first, "Last_name": prin_last, "Department": "Administration", "Title": "Principal"})
 
             num_teachers = parse_count(config["TEACHERS_PER_SCHOOL"])
             school_teacher_ids = []
             for t_idx in range(num_teachers):
-                t_id = get_hex_id(7) if config["ID_MODE"] == 'alphanumeric' else get_sequential_id(base_id_seq, (s_idx * 1000) + t_idx)
+                t_id = make_teacher_id(config["ID_MODE"], base_id_seq, (s_idx * 1000) + t_idx)
                 uname, email = generate_email_username(fake.first_name(), fake.last_name(), current_domain, config["USERNAME_FMT"])
                 dist_db["teachers"].append({"School_id": school_id, "Teacher_id": t_id, "Teacher_number": t_id[:8], "State_teacher_id": f"{state_abbr}-{t_id[:8]}", "Teacher_email": email, "Username": uname, "First_name": fake.first_name(), "Last_name": fake.last_name(), "Title": "Teacher"})
                 school_teacher_ids.append(t_id)
@@ -543,7 +569,10 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
                 for term in CORE_TERMS:
                     t_start, t_end = term["Term_start"], term["Term_end"]
                     for period_idx in range(config["SECTIONS_PER_TEACHER_TERM"]):
-                        sec_id = get_hex_id(8) if config["ID_MODE"] == 'alphanumeric' else f"SEC-{uuid.uuid4().hex[:8]}"
+                        sec_id = make_section_id(config["ID_MODE"])
+                        while sec_id in _seen_section_ids:
+                            sec_id = make_section_id(config["ID_MODE"])
+                        _seen_section_ids.add(sec_id)
                         s_grade, s_subj = random.choice(grade_list), random.choice(['Math', 'Science', 'ELA', 'History', 'Art', 'PE'])
                         sec_name = f"{s_grade} - {s_subj}"
                         assigned_teacher = t_id
@@ -578,7 +607,10 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
             estimated_students = int((len(school_section_ids) * parse_count(config["STUDENTS_PER_SECTION"])) / config["SECTIONS_PER_TEACHER_TERM"])
             school_student_objs = []
             for stu_idx in range(estimated_students):
-                stu_id = get_hex_id(6) if config["ID_MODE"] == 'alphanumeric' else get_sequential_id(base_id_seq, 200000 + (s_idx * 5000) + stu_idx)
+                stu_id = make_student_id(config["ID_MODE"], base_id_seq, 200000 + (s_idx * 5000) + stu_idx)
+                while stu_id in _seen_student_ids:
+                    stu_id = make_student_id(config["ID_MODE"])
+                _seen_student_ids.add(stu_id)
                 f, l, s_grade = fake.first_name(), fake.last_name(), random.choice(grade_list)
 
                 # Student name / id edge cases
@@ -672,11 +704,11 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
             # Sc 35: Teacher with No Student Mapping
             # Done once (first school only): add a real teacher whose sections get zero enrollments.
             if ec_active("sc_35") and s_idx == 0:
-                sc35_t_id = get_hex_id(7) if config["ID_MODE"] == 'alphanumeric' else get_sequential_id(base_id_seq, 88801)
+                sc35_t_id = make_teacher_id(config["ID_MODE"], base_id_seq, 88801)
                 sc35_uname, sc35_email = generate_email_username(fake.first_name(), fake.last_name(), current_domain, config["USERNAME_FMT"])
                 dist_db["teachers"].append({"School_id": school_id, "Teacher_id": sc35_t_id, "Teacher_number": sc35_t_id[:8], "State_teacher_id": f"{state_abbr}-{sc35_t_id[:8]}", "Teacher_email": sc35_email, "Username": sc35_uname, "First_name": fake.first_name(), "Last_name": fake.last_name(), "Title": "Teacher"})
                 for p_idx in range(config["SECTIONS_PER_TEACHER_TERM"]):
-                    sc35_sec_id = get_hex_id(8) if config["ID_MODE"] == 'alphanumeric' else f"SEC-{uuid.uuid4().hex[:8]}"
+                    sc35_sec_id = make_section_id(config["ID_MODE"])
                     s_grade = random.choice(grade_list)
                     dist_db["sections"].append({"School_id": school_id, "Section_id": sc35_sec_id, "Teacher_id": sc35_t_id, "Teacher_2_id": "", "Name": f"{s_grade} - Math", "Grade": s_grade, "Subject": "Math", "Term_name": CORE_TERMS[0]["Term_name"], "Term_start": CORE_TERMS[0]["Term_start"], "Term_end": CORE_TERMS[0]["Term_end"], "Period": str(p_idx + 1)})
                     # Intentionally no enrollments added for these sections
@@ -689,7 +721,7 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
                 sc36_teacher_id = school_teacher_ids[0]
                 sc36_teacher_sections = [sec for sec in dist_db["sections"] if sec["Teacher_id"] == sc36_teacher_id and sec["School_id"] == school_id]
                 if sc36_teacher_sections:
-                    sc36_stu_id = get_hex_id(6) if config["ID_MODE"] == 'alphanumeric' else get_sequential_id(base_id_seq, 88802)
+                    sc36_stu_id = make_student_id(config["ID_MODE"], base_id_seq, 88802)
                     sc36_f, sc36_l = fake.first_name(), fake.last_name()
                     sc36_uname, sc36_email = generate_email_username(sc36_f, sc36_l, current_domain, config["USERNAME_FMT"])
                     sc36_grade = sc36_teacher_sections[0]["Grade"] if sc36_teacher_sections[0]["Grade"] in grade_list else grade_list[0]
@@ -701,7 +733,7 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
                     ec_report("sc_36", f"Student_id: {sc36_stu_id} enrolled only in sections of Teacher_id: {sc36_teacher_id} ({len(sc36_teacher_sections)} sections)")
 
             if s_idx == 0:
-                dist_db["staff"].insert(0, {"School_id": school_id, "Staff_id": get_hex_id(7) if config["ID_MODE"] == 'alphanumeric' else str(base_id_seq + 99999), "Staff_email": f"admin@{current_domain}", "First_name": "System", "Last_name": "Admin", "Department": "Central", "Title": "Admin"})
+                dist_db["staff"].insert(0, {"School_id": school_id, "Staff_id": make_staff_id(config["ID_MODE"], base_id_seq, 99999), "Staff_email": f"admin@{current_domain}", "First_name": "System", "Last_name": "Admin", "Department": "Central", "Title": "Admin"})
 
         # --- MULTI-SCHOOL STATIC EDGE CASES ---
         if len(dist_db["schools"]) > 1:
@@ -744,7 +776,7 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
 
             if ec_active("sc_23"):
                 scen_23_school = dist_db["schools"][-1]
-                split_school_id = get_hex_id(6) if config["ID_MODE"] == 'alphanumeric' else get_sequential_id(base_id_seq, 99999)
+                split_school_id = make_school_id(config["ID_MODE"], base_id_seq, 99999)
                 split_school = scen_23_school.copy(); split_school["School_id"] = split_school_id; split_school["School_name"] = scen_23_school["School_name"] + " - Annex"
                 dist_db["schools"].append(split_school)
                 ec_report("sc_23", f"Split Annex: {split_school_id}")
