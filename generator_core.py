@@ -329,6 +329,159 @@ ELL_PROB_MATRIX = {
     (False, True):  0.12,   # Hispanic, non-Spanish: some ELL need
     (False, False): 0.03,   # General population baseline
 }
+
+# ==========================================
+# COURSE CATALOG
+# ==========================================
+# One canonical course per (subject, grade) combination.
+# Sections reference this catalog via course_name, course_number,
+# and course_description — no separate courses file needed.
+# Keyed as (subject, grade_string).
+
+COURSE_CATALOG = {
+    # --- MATH ---
+    ("Math", "KG"): ("Kindergarten Math",            "MATH-KG", "Foundational number sense, counting, and basic shapes."),
+    ("Math", "1"):  ("Grade 1 Math",                 "MATH-01", "Addition, subtraction, and introduction to place value."),
+    ("Math", "2"):  ("Grade 2 Math",                 "MATH-02", "Multi-digit addition and subtraction, measurement, and data."),
+    ("Math", "3"):  ("Grade 3 Math",                 "MATH-03", "Multiplication, division, fractions, and area."),
+    ("Math", "4"):  ("Grade 4 Math",                 "MATH-04", "Multi-digit multiplication, fraction equivalence, and decimals."),
+    ("Math", "5"):  ("Grade 5 Math",                 "MATH-05", "Fractions, decimals, and introduction to coordinate systems."),
+    ("Math", "6"):  ("Pre-Algebra",                  "MATH-06", "Ratios, proportional relationships, and introduction to algebra."),
+    ("Math", "7"):  ("Algebra 1",                    "MATH-07", "Linear equations, inequalities, and functions."),
+    ("Math", "8"):  ("Algebra 2",                    "MATH-08", "Quadratic functions, polynomials, and systems of equations."),
+    ("Math", "9"):  ("Geometry",                     "MATH-09", "Congruence, similarity, trigonometry, and proof."),
+    ("Math", "10"): ("Pre-Calculus",                 "MATH-10", "Trigonometric functions, vectors, and limits."),
+    ("Math", "11"): ("AP Calculus AB",               "MATH-11", "Differential and integral calculus with applications."),
+    ("Math", "12"): ("AP Calculus BC",               "MATH-12", "Advanced integration techniques, series, and parametric equations."),
+
+    # --- ELA ---
+    ("ELA", "KG"): ("Kindergarten Language Arts",    "ELA-KG",  "Phonics, print concepts, and foundational reading skills."),
+    ("ELA", "1"):  ("Grade 1 Language Arts",         "ELA-01",  "Phonics, fluency, and beginning reading comprehension."),
+    ("ELA", "2"):  ("Grade 2 Language Arts",         "ELA-02",  "Reading comprehension, writing conventions, and vocabulary."),
+    ("ELA", "3"):  ("Grade 3 Language Arts",         "ELA-03",  "Literature analysis, informational text, and narrative writing."),
+    ("ELA", "4"):  ("Grade 4 Language Arts",         "ELA-04",  "Opinion writing, research skills, and literary analysis."),
+    ("ELA", "5"):  ("Grade 5 Language Arts",         "ELA-05",  "Figurative language, text structure, and argumentative writing."),
+    ("ELA", "6"):  ("English 6",                     "ELA-06",  "Fiction and nonfiction analysis, essay writing, and grammar."),
+    ("ELA", "7"):  ("English 7",                     "ELA-07",  "Literary themes, research writing, and oral communication."),
+    ("ELA", "8"):  ("English 8",                     "ELA-08",  "Argumentative writing, close reading, and language conventions."),
+    ("ELA", "9"):  ("English 9",                     "ELA-09",  "World literature, narrative writing, and rhetorical analysis."),
+    ("ELA", "10"): ("English 10",                    "ELA-10",  "American literature, analytical essays, and seminar discussion."),
+    ("ELA", "11"): ("AP Language & Composition",     "ELA-11",  "Rhetorical analysis, synthesis essays, and argumentation."),
+    ("ELA", "12"): ("AP Literature & Composition",   "ELA-12",  "Literary analysis, poetry, drama, and extended essay."),
+
+    # --- SCIENCE ---
+    ("Science", "KG"): ("Kindergarten Science",      "SCI-KG",  "Observation, weather, plants, animals, and basic earth science."),
+    ("Science", "1"):  ("Grade 1 Science",           "SCI-01",  "Matter, motion, living things, and seasonal changes."),
+    ("Science", "2"):  ("Grade 2 Science",           "SCI-02",  "Ecosystems, forces, landforms, and weather patterns."),
+    ("Science", "3"):  ("Grade 3 Science",           "SCI-03",  "Life cycles, habitats, forces, and weather data."),
+    ("Science", "4"):  ("Grade 4 Science",           "SCI-04",  "Energy, waves, Earth processes, and organisms."),
+    ("Science", "5"):  ("Grade 5 Science",           "SCI-05",  "Matter and energy, ecosystems, and Earth systems."),
+    ("Science", "6"):  ("Life Science",              "SCI-06",  "Cell biology, genetics, evolution, and ecosystems."),
+    ("Science", "7"):  ("Earth Science",             "SCI-07",  "Geology, meteorology, oceanography, and astronomy."),
+    ("Science", "8"):  ("Physical Science",          "SCI-08",  "Motion, forces, energy, waves, and chemical reactions."),
+    ("Science", "9"):  ("Biology",                   "SCI-09",  "Cell structure, heredity, evolution, and body systems."),
+    ("Science", "10"): ("Chemistry",                 "SCI-10",  "Atomic structure, bonding, reactions, and stoichiometry."),
+    ("Science", "11"): ("Physics",                   "SCI-11",  "Mechanics, electricity, magnetism, and waves."),
+    ("Science", "12"): ("AP Environmental Science",  "SCI-12",  "Earth systems, biodiversity, pollution, and sustainability."),
+
+    # --- HISTORY ---
+    ("History", "KG"): ("Social Studies - K",        "HIST-KG", "Community helpers, maps, and family history."),
+    ("History", "1"):  ("Social Studies - Grade 1",  "HIST-01", "Families, communities, and basic geography."),
+    ("History", "2"):  ("Social Studies - Grade 2",  "HIST-02", "Local history, government, and cultural diversity."),
+    ("History", "3"):  ("Social Studies - Grade 3",  "HIST-03", "State history, economics, and citizenship."),
+    ("History", "4"):  ("Social Studies - Grade 4",  "HIST-04", "Regional geography, Native American history, and exploration."),
+    ("History", "5"):  ("Social Studies - Grade 5",  "HIST-05", "U.S. history through the Civil War and Reconstruction."),
+    ("History", "6"):  ("World History: Ancient",    "HIST-06", "Mesopotamia, Egypt, Greece, Rome, and ancient civilizations."),
+    ("History", "7"):  ("World History: Medieval",   "HIST-07", "Middle Ages, Renaissance, Reformation, and early exploration."),
+    ("History", "8"):  ("U.S. History",              "HIST-08", "American Revolution through Reconstruction."),
+    ("History", "9"):  ("World History: Modern",     "HIST-09", "Industrialization, imperialism, World Wars, and Cold War."),
+    ("History", "10"): ("U.S. History",              "HIST-10", "Progressivism through the present day."),
+    ("History", "11"): ("AP U.S. History",           "HIST-11", "In-depth study of American history from colonization to present."),
+    ("History", "12"): ("AP Government & Politics",  "HIST-12", "Constitutional principles, civil liberties, and political systems."),
+
+    # --- ART ---
+    ("Art", "KG"): ("Kindergarten Art",              "ART-KG",  "Color, shape, line, and basic studio techniques."),
+    ("Art", "1"):  ("Grade 1 Art",                   "ART-01",  "Elements of art and introduction to various media."),
+    ("Art", "2"):  ("Grade 2 Art",                   "ART-02",  "Principles of design and cultural art forms."),
+    ("Art", "3"):  ("Grade 3 Art",                   "ART-03",  "Art history, mixed media, and creative expression."),
+    ("Art", "4"):  ("Grade 4 Art",                   "ART-04",  "Drawing, painting, and sculpture fundamentals."),
+    ("Art", "5"):  ("Grade 5 Art",                   "ART-05",  "Portfolio development and art critique."),
+    ("Art", "6"):  ("Visual Arts 6",                 "ART-06",  "Drawing, painting, and introduction to digital art."),
+    ("Art", "7"):  ("Visual Arts 7",                 "ART-07",  "Printmaking, ceramics, and art history connections."),
+    ("Art", "8"):  ("Visual Arts 8",                 "ART-08",  "Mixed media, photography basics, and portfolio preparation."),
+    ("Art", "9"):  ("Studio Art I",                  "ART-09",  "Foundational studio techniques across multiple media."),
+    ("Art", "10"): ("Studio Art II",                 "ART-10",  "Advanced studio work and thematic project development."),
+    ("Art", "11"): ("AP Studio Art: Drawing",        "ART-11",  "Portfolio-based course in drawing and compositional skills."),
+    ("Art", "12"): ("AP Art History",                "ART-12",  "Global art history from prehistoric times to the present."),
+
+    # --- PE ---
+    ("PE", "KG"): ("Kindergarten PE",                "PE-KG",   "Gross motor skills, movement, and cooperative games."),
+    ("PE", "1"):  ("Grade 1 PE",                     "PE-01",   "Locomotor skills, balance, and partner activities."),
+    ("PE", "2"):  ("Grade 2 PE",                     "PE-02",   "Ball skills, fitness concepts, and team games."),
+    ("PE", "3"):  ("Grade 3 PE",                     "PE-03",   "Cooperative games, fitness testing, and sportsmanship."),
+    ("PE", "4"):  ("Grade 4 PE",                     "PE-04",   "Sport skills, health-related fitness, and goal setting."),
+    ("PE", "5"):  ("Grade 5 PE",                     "PE-05",   "Team sports, individual fitness, and wellness education."),
+    ("PE", "6"):  ("Physical Education 6",           "PE-06",   "Team sports, fitness assessment, and personal health goals."),
+    ("PE", "7"):  ("Physical Education 7",           "PE-07",   "Lifetime fitness activities and sport-specific skills."),
+    ("PE", "8"):  ("Physical Education 8",           "PE-08",   "Fitness planning, nutrition, and competitive sports."),
+    ("PE", "9"):  ("Health & PE 9",                  "PE-09",   "Physical fitness, mental health, and consumer health."),
+    ("PE", "10"): ("Health & PE 10",                 "PE-10",   "Team sports, personal fitness plans, and stress management."),
+    ("PE", "11"): ("Fitness & Wellness",             "PE-11",   "Exercise science, nutrition, and lifelong wellness habits."),
+    ("PE", "12"): ("Sports Medicine",                "PE-12",   "Athletic training, injury prevention, and rehabilitation basics."),
+
+    # --- SUMMER ---
+    ("Summer Math", "KG"): ("Summer Math - K",       "SUM-MATH-KG", "Summer enrichment in number sense and counting."),
+    ("Summer Math", "1"):  ("Summer Math - Grade 1", "SUM-MATH-01", "Summer review of addition, subtraction, and place value."),
+    ("Summer Math", "2"):  ("Summer Math - Grade 2", "SUM-MATH-02", "Summer review of multi-digit operations and measurement."),
+    ("Summer Math", "3"):  ("Summer Math - Grade 3", "SUM-MATH-03", "Summer review of multiplication, division, and fractions."),
+    ("Summer Math", "4"):  ("Summer Math - Grade 4", "SUM-MATH-04", "Summer review of fractions, decimals, and geometry."),
+    ("Summer Math", "5"):  ("Summer Math - Grade 5", "SUM-MATH-05", "Summer review of fractions, decimals, and ratios."),
+    ("Summer Math", "6"):  ("Summer Pre-Algebra",    "SUM-MATH-06", "Summer enrichment in ratios and early algebraic thinking."),
+    ("Summer Math", "7"):  ("Summer Algebra 1",      "SUM-MATH-07", "Summer bridge course for algebra readiness."),
+    ("Summer Math", "8"):  ("Summer Algebra 2",      "SUM-MATH-08", "Summer review of quadratic functions and polynomials."),
+    ("Summer Math", "9"):  ("Summer Geometry",       "SUM-MATH-09", "Summer review of geometric proofs and trigonometry."),
+    ("Summer Math", "10"): ("Summer Pre-Calculus",   "SUM-MATH-10", "Summer bridge to calculus concepts."),
+    ("Summer Math", "11"): ("Summer Calculus",       "SUM-MATH-11", "Summer enrichment in differential calculus."),
+    ("Summer Math", "12"): ("Summer Math Elective",  "SUM-MATH-12", "Advanced summer mathematics topics."),
+    ("Summer Reading", "KG"): ("Summer Reading - K",       "SUM-ELA-KG",  "Summer phonics and early literacy enrichment."),
+    ("Summer Reading", "1"):  ("Summer Reading - Grade 1", "SUM-ELA-01",  "Summer fluency and comprehension enrichment."),
+    ("Summer Reading", "2"):  ("Summer Reading - Grade 2", "SUM-ELA-02",  "Summer vocabulary and reading comprehension."),
+    ("Summer Reading", "3"):  ("Summer Reading - Grade 3", "SUM-ELA-03",  "Summer literature and writing enrichment."),
+    ("Summer Reading", "4"):  ("Summer Reading - Grade 4", "SUM-ELA-04",  "Summer reading and essay writing enrichment."),
+    ("Summer Reading", "5"):  ("Summer Reading - Grade 5", "SUM-ELA-05",  "Summer literary analysis and writing practice."),
+    ("Summer Reading", "6"):  ("Summer English 6",         "SUM-ELA-06",  "Summer reading and composition enrichment."),
+    ("Summer Reading", "7"):  ("Summer English 7",         "SUM-ELA-07",  "Summer literature and writing enrichment."),
+    ("Summer Reading", "8"):  ("Summer English 8",         "SUM-ELA-08",  "Summer argumentative writing and reading practice."),
+    ("Summer Reading", "9"):  ("Summer English 9",         "SUM-ELA-09",  "Summer world literature and writing enrichment."),
+    ("Summer Reading", "10"): ("Summer English 10",        "SUM-ELA-10",  "Summer American literature and essay writing."),
+    ("Summer Reading", "11"): ("Summer AP Language",       "SUM-ELA-11",  "Summer prep for AP Language and Composition."),
+    ("Summer Reading", "12"): ("Summer AP Literature",     "SUM-ELA-12",  "Summer prep for AP Literature and Composition."),
+    ("Summer Credit Recovery", "KG"): ("Summer Credit Recovery", "SUM-CR-KG", "Credit recovery and academic support program."),
+    ("Summer Credit Recovery", "1"):  ("Summer Credit Recovery", "SUM-CR-01", "Credit recovery and academic support program."),
+    ("Summer Credit Recovery", "2"):  ("Summer Credit Recovery", "SUM-CR-02", "Credit recovery and academic support program."),
+    ("Summer Credit Recovery", "3"):  ("Summer Credit Recovery", "SUM-CR-03", "Credit recovery and academic support program."),
+    ("Summer Credit Recovery", "4"):  ("Summer Credit Recovery", "SUM-CR-04", "Credit recovery and academic support program."),
+    ("Summer Credit Recovery", "5"):  ("Summer Credit Recovery", "SUM-CR-05", "Credit recovery and academic support program."),
+    ("Summer Credit Recovery", "6"):  ("Summer Credit Recovery", "SUM-CR-06", "Credit recovery and academic support program."),
+    ("Summer Credit Recovery", "7"):  ("Summer Credit Recovery", "SUM-CR-07", "Credit recovery and academic support program."),
+    ("Summer Credit Recovery", "8"):  ("Summer Credit Recovery", "SUM-CR-08", "Credit recovery and academic support program."),
+    ("Summer Credit Recovery", "9"):  ("Summer Credit Recovery", "SUM-CR-09", "Credit recovery and academic support program."),
+    ("Summer Credit Recovery", "10"): ("Summer Credit Recovery", "SUM-CR-10", "Credit recovery and academic support program."),
+    ("Summer Credit Recovery", "11"): ("Summer Credit Recovery", "SUM-CR-11", "Credit recovery and academic support program."),
+    ("Summer Credit Recovery", "12"): ("Summer Credit Recovery", "SUM-CR-12", "Credit recovery and academic support program."),
+}
+
+def get_course(subject, grade):
+    """
+    Look up course name, number, and description from the catalog.
+    Falls back gracefully if the (subject, grade) combo isn't in the catalog.
+    """
+    entry = COURSE_CATALOG.get((subject, str(grade)))
+    if entry:
+        return entry[0], entry[1], entry[2]
+    # Fallback: generic name for unmapped combos (e.g. edge case grades like '-1', '13')
+    return f"{subject} - Grade {grade}", f"{subject[:3].upper()}-{str(grade).zfill(2)}", f"{subject} course for grade {grade}."
+
 DISABILITY_MAP = {"AUT": "Autism", "SLD": "Specific learning disability", "SLI": "Speech or language impairment"}
 DISABILITY_CODES = list(DISABILITY_MAP.keys())
 
@@ -426,7 +579,7 @@ def init_files(out_dir, schema, do_attendance=False):
         "teachers": ["School_id", "Teacher_id", "Teacher_number", "State_teacher_id", "Teacher_email", "Username", "First_name", "Last_name", "Title"],
         "staff": ["School_id", "Staff_id", "Staff_email", "First_name", "Last_name", "Department", "Title"],
         "students": ["School_id", "Student_id", "Student_number", "State_id", "Last_name", "First_name", "Grade", "Gender", "DOB", "Student_email", "Username", "Race", "Hispanic_latino", "Home_language", "IEP_status", "FRL_status", "ELL_status", "Section_504_status", "Gifted_status", "Disability_status", "Disability_type", "Disability_code", "ext.locker_number", "ext.bus_route", "Contact_relationship", "Contact_type", "Contact_name", "Contact_phone", "Contact_phone_type", "Contact_email", "Contact_sis_id"],
-        "sections": ["School_id", "Section_id", "Teacher_id", "Teacher_2_id", "Name", "Grade", "Subject", "Term_name", "Term_start", "Term_end", "Period"],
+        "sections": ["School_id", "Section_id", "Teacher_id", "Teacher_2_id", "Name", "Course_name", "Course_number", "Course_description", "Grade", "Subject", "Term_name", "Term_start", "Term_end", "Period"],
         "enrollments": ["School_id", "Section_id", "Student_id"],
         "attendance": ["Attendance_id", "School_id", "Student_id", "Section_id", "Attendance_date", "Attendance_status", "Attendance_type", "Excuse_code"],
         "users": ["School_name", "User_type", "User_id", "First_name", "Last_name", "Email", "Username", "Grade", "DOB"],
@@ -607,7 +760,8 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
                             assigned_teacher = ""
                             ec_report("sc_06", f"Section_id: {sec_id}")
 
-                        dist_db["sections"].append({"School_id": school_id, "Section_id": sec_id, "Teacher_id": assigned_teacher, "Teacher_2_id": "", "Name": sec_name, "Grade": s_grade, "Subject": s_subj, "Term_name": term["Term_name"], "Term_start": t_start, "Term_end": t_end, "Period": str(period_idx + 1)})
+                        _cname, _cnum, _cdesc = get_course(s_subj, s_grade)
+                        dist_db["sections"].append({"School_id": school_id, "Section_id": sec_id, "Teacher_id": assigned_teacher, "Teacher_2_id": "", "Name": sec_name, "Course_name": _cname, "Course_number": _cnum, "Course_description": _cdesc, "Grade": s_grade, "Subject": s_subj, "Term_name": term["Term_name"], "Term_start": t_start, "Term_end": t_end, "Period": str(period_idx + 1)})
                         school_section_ids.append({"id": sec_id, "grade": s_grade})
 
             estimated_students = int((len(school_section_ids) * parse_count(config["STUDENTS_PER_SECTION"])) / config["SECTIONS_PER_TEACHER_TERM"])
@@ -716,7 +870,8 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
                 for p_idx in range(config["SECTIONS_PER_TEACHER_TERM"]):
                     sc35_sec_id = make_section_id(config["ID_MODE"])
                     s_grade = random.choice(grade_list)
-                    dist_db["sections"].append({"School_id": school_id, "Section_id": sc35_sec_id, "Teacher_id": sc35_t_id, "Teacher_2_id": "", "Name": f"{s_grade} - Math", "Grade": s_grade, "Subject": "Math", "Term_name": CORE_TERMS[0]["Term_name"], "Term_start": CORE_TERMS[0]["Term_start"], "Term_end": CORE_TERMS[0]["Term_end"], "Period": str(p_idx + 1)})
+                    _sc35_cname, _sc35_cnum, _sc35_cdesc = get_course("Math", s_grade)
+                    dist_db["sections"].append({"School_id": school_id, "Section_id": sc35_sec_id, "Teacher_id": sc35_t_id, "Teacher_2_id": "", "Name": f"{s_grade} - Math", "Course_name": _sc35_cname, "Course_number": _sc35_cnum, "Course_description": _sc35_cdesc, "Grade": s_grade, "Subject": "Math", "Term_name": CORE_TERMS[0]["Term_name"], "Term_start": CORE_TERMS[0]["Term_start"], "Term_end": CORE_TERMS[0]["Term_end"], "Period": str(p_idx + 1)})
                     # Intentionally no enrollments added for these sections
                 ec_report("sc_35", f"Teacher_id: {sc35_t_id} (school: {school_id}, {config['SECTIONS_PER_TEACHER_TERM']} sections, 0 enrollments)")
 
