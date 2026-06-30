@@ -561,7 +561,7 @@ def generate_household_contacts(student_last_name):
     rel_options = [("Mother", "female", "Parent/Guardian"), ("Father", "male", "Parent/Guardian"), ("Grandmother", "female", "Emergency"), ("Grandfather", "male", "Emergency"), ("Aunt", "female", "Emergency"), ("Uncle", "male", "Emergency"), ("Guardian", "neutral", "Parent/Guardian")]
     choice = random.choices(rel_options, weights=[40, 40, 5, 5, 3, 3, 4], k=1)[0]
     relationship, gender, contact_type = choice
-    f_name = fake.first_name_female() if gender == "female" else fake.first_name_male() if gender == "male" else fake.first_name()
+    f_name = census_first_name("F") if gender == "female" else census_first_name("M") if gender == "male" else census_first_name()
     return [{
         "Contact_relationship": relationship,
         "Contact_type": contact_type,
@@ -705,16 +705,17 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
             school_type = random.choice(['Elementary', 'Middle', 'High', 'Academy'])
             low, high = ('KG', '5') if 'Elementary' in school_type else ('6', '8') if 'Middle' in school_type else ('9', '12') if 'High' in school_type else ('KG', '12')
 
-            prin_first, prin_last = fake.first_name(), fake.last_name()
-            dist_db["schools"].append({"School_id": school_id, "School_name": f"{fake.last_name()} {school_type}", "School_number": f"{s_idx + 1:02d}", "Low_grade": low, "High_grade": high, "Principal": f"{prin_first} {prin_last}", "Principal_email": f"principal.{school_id}@{current_domain}", "School_address": fake.street_address(), "School_city": random.choice(REAL_LOCATIONS.get(state_abbr, [("City", "000")]))[0], "School_state": state_abbr, "School_zip": f"900{random.randint(10, 99)}", "School_phone": fake.phone_number()})
+            prin_first, prin_last = census_full_name()
+            dist_db["schools"].append({"School_id": school_id, "School_name": f"{census_last_name()} {school_type}", "School_number": f"{s_idx + 1:02d}", "Low_grade": low, "High_grade": high, "Principal": f"{prin_first} {prin_last}", "Principal_email": f"principal.{school_id}@{current_domain}", "School_address": fake.street_address(), "School_city": random.choice(REAL_LOCATIONS.get(state_abbr, [("City", "000")]))[0], "School_state": state_abbr, "School_zip": f"900{random.randint(10, 99)}", "School_phone": fake.phone_number()})
             dist_db["staff"].append({"School_id": school_id, "Staff_id": make_staff_id(config["ID_MODE"], base_id_seq, 90000 + s_idx), "Staff_email": f"principal.{school_id}@{current_domain}", "First_name": prin_first, "Last_name": prin_last, "Department": "Administration", "Title": "Principal"})
 
             num_teachers = parse_count(config["TEACHERS_PER_SCHOOL"])
             school_teacher_ids = []
             for t_idx in range(num_teachers):
                 t_id = make_teacher_id(config["ID_MODE"], base_id_seq, (s_idx * 1000) + t_idx)
-                uname, email = generate_email_username(fake.first_name(), fake.last_name(), current_domain, config["USERNAME_FMT"])
-                dist_db["teachers"].append({"School_id": school_id, "Teacher_id": t_id, "Teacher_number": t_id[:8], "State_teacher_id": f"{state_abbr}-{t_id[:8]}", "Teacher_email": email, "Username": uname, "First_name": fake.first_name(), "Last_name": fake.last_name(), "Title": "Teacher"})
+                _tf, _tl = census_full_name()
+                uname, email = generate_email_username(_tf, _tl, current_domain, config["USERNAME_FMT"])
+                dist_db["teachers"].append({"School_id": school_id, "Teacher_id": t_id, "Teacher_number": t_id[:8], "State_teacher_id": f"{state_abbr}-{t_id[:8]}", "Teacher_email": email, "Username": uname, "First_name": _tf, "Last_name": _tl, "Title": "Teacher"})
                 school_teacher_ids.append(t_id)
 
             # Sc 18: Teacher without Sections — pop one teacher before section assignment
@@ -771,7 +772,7 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
                 while stu_id in _seen_student_ids:
                     stu_id = make_student_id(config["ID_MODE"])
                 _seen_student_ids.add(stu_id)
-                f, l, s_grade = fake.first_name(), fake.last_name(), random.choice(grade_list)
+                f, l, s_grade = census_first_name(), census_last_name(), random.choice(grade_list)
 
                 # Student name / id edge cases
                 r_val = random.random()
@@ -865,8 +866,9 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
             # Done once (first school only): add a real teacher whose sections get zero enrollments.
             if ec_active("sc_35") and s_idx == 0:
                 sc35_t_id = make_teacher_id(config["ID_MODE"], base_id_seq, 88801)
-                sc35_uname, sc35_email = generate_email_username(fake.first_name(), fake.last_name(), current_domain, config["USERNAME_FMT"])
-                dist_db["teachers"].append({"School_id": school_id, "Teacher_id": sc35_t_id, "Teacher_number": sc35_t_id[:8], "State_teacher_id": f"{state_abbr}-{sc35_t_id[:8]}", "Teacher_email": sc35_email, "Username": sc35_uname, "First_name": fake.first_name(), "Last_name": fake.last_name(), "Title": "Teacher"})
+                _sc35f, _sc35l = census_full_name()
+                sc35_uname, sc35_email = generate_email_username(_sc35f, _sc35l, current_domain, config["USERNAME_FMT"])
+                dist_db["teachers"].append({"School_id": school_id, "Teacher_id": sc35_t_id, "Teacher_number": sc35_t_id[:8], "State_teacher_id": f"{state_abbr}-{sc35_t_id[:8]}", "Teacher_email": sc35_email, "Username": sc35_uname, "First_name": _sc35f, "Last_name": _sc35l, "Title": "Teacher"})
                 for p_idx in range(config["SECTIONS_PER_TEACHER_TERM"]):
                     sc35_sec_id = make_section_id(config["ID_MODE"])
                     s_grade = random.choice(grade_list)
@@ -883,7 +885,7 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
                 sc36_teacher_sections = [sec for sec in dist_db["sections"] if sec["Teacher_id"] == sc36_teacher_id and sec["School_id"] == school_id]
                 if sc36_teacher_sections:
                     sc36_stu_id = make_student_id(config["ID_MODE"], base_id_seq, 88802)
-                    sc36_f, sc36_l = fake.first_name(), fake.last_name()
+                    sc36_f, sc36_l = census_full_name()
                     sc36_uname, sc36_email = generate_email_username(sc36_f, sc36_l, current_domain, config["USERNAME_FMT"])
                     sc36_grade = sc36_teacher_sections[0]["Grade"] if sc36_teacher_sections[0]["Grade"] in grade_list else grade_list[0]
                     sc36_stu = {"School_id": school_id, "Student_id": sc36_stu_id, "Student_number": sc36_stu_id[:8], "State_id": f"{state_abbr}-{sc36_stu_id[:8]}", "Last_name": sc36_l, "First_name": sc36_f, "Grade": sc36_grade, "Gender": random.choice(['M', 'F']), "DOB": generate_dob(sc36_grade), "Student_email": sc36_email, "Username": sc36_uname, "Race": random.choices(CLEVER_RACE_VALUES, weights=RACE_WEIGHTS)[0], "Hispanic_latino": "N", "Home_language": random.choices(LANG_KEYS, weights=get_lang_weights(config["PROB_HISPANIC"]))[0], "IEP_status": "N", "FRL_status": "N", "ELL_status": "N", "Section_504_status": "N", "Gifted_status": "N", "Disability_status": "N", "Disability_type": "", "Disability_code": "", "ext.locker_number": "", "ext.bus_route": "", "Contact_relationship": "", "Contact_type": "", "Contact_name": "", "Contact_phone": "", "Contact_phone_type": "", "Contact_email": "", "Contact_sis_id": ""}
