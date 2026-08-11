@@ -1060,9 +1060,14 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
                     key = sec["Course_number"]
                     if key not in seen_courses:
                         seen_courses[key] = (sec["Course_name"], sec["Course_number"])
+                MAX_RESOURCES = 25
                 for course_num, (course_name, course_number) in seen_courses.items():
+                    if len(dist_db["resources"]) >= MAX_RESOURCES:
+                        break
                     num_resources = random.randint(1, 3)
                     for r_idx in range(num_resources):
+                        if len(dist_db["resources"]) >= MAX_RESOURCES:
+                            break
                         resource_types = [
                             ("Lesson", "student"),
                             ("Quiz", "student"),
