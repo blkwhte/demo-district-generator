@@ -757,7 +757,7 @@ def init_files(out_dir, schema, do_attendance=False, do_resources=False):
         "sections": ["School_id", "Section_id", "Teacher_id", "Teacher_2_id", "Name", "Course_name", "Course_number", "Course_description", "Grade", "Subject", "Term_name", "Term_start", "Term_end", "Period"],
         "enrollments": ["School_id", "Section_id", "Student_id"],
         "attendance": ["Attendance_id", "School_id", "Student_id", "Section_id", "Attendance_date", "Attendance_status", "Attendance_type", "Excuse_code"],
-        "resources": ["Resource_id", "Title", "Roles", "Course_number", "Course_name"],
+        "resources": ["Resource_id", "Title"],
         "users": ["School_name", "User_type", "User_id", "First_name", "Last_name", "Email", "Username", "Grade", "DOB"],
         "anyschool_sections": ["School_name", "Section_id", "User_id", "Teacher_id", "School_number", "Subject", "Period", "Section_name"]
     }
@@ -1075,15 +1075,12 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
                             ("Reading", "student"),
                             ("Worksheet", "student"),
                         ]
-                        r_type, r_roles = random.choice(resource_types)
+                        r_type, _ = random.choice(resource_types)
                         r_title = f"{course_name} - {r_type} {r_idx + 1}"
                         r_id = f"res-{uuid.uuid4().hex[:8]}"
                         dist_db["resources"].append({
                             "Resource_id": r_id,
                             "Title": r_title,
-                            "Roles": r_roles,
-                            "Course_number": course_number,
-                            "Course_name": course_name,
                         })
 
             # Sc 35: Teacher with No Student Mapping
