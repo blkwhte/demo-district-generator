@@ -97,6 +97,13 @@ if selected_edge_cases:
 else:
     console.print("\n[dim]No edge cases selected — a clean dataset will be generated.[/dim]")
 
+console.print("\n[bold cyan]-- Optional Data Files --[/bold cyan]")
+config["DO_ATTENDANCE"] = Confirm.ask("Generate Attendance Data?", default=DEFAULTS.get("DO_ATTENDANCE", False))
+config["DO_RESOURCES"] = Confirm.ask(
+    "Generate Resources Data? (1-3 synthetic resources per course for content mapping)",
+    default=DEFAULTS.get("DO_RESOURCES", False)
+)
+
 if not Confirm.ask("\nReady to generate?", default=True):
     exit()
 

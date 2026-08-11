@@ -748,7 +748,7 @@ def generate_household_contacts(student_last_name):
     }]
 
 # --- FILE STREAMING HELPERS ---
-def init_files(out_dir, schema, do_attendance=False):
+def init_files(out_dir, schema, do_attendance=False, do_resources=False):
     HEADERS = {
         "schools": ["School_id", "School_name", "School_number", "Low_grade", "High_grade", "Principal", "Principal_email", "School_address", "School_city", "School_state", "School_zip", "School_phone"],
         "teachers": ["School_id", "Teacher_id", "Teacher_number", "State_teacher_id", "Teacher_email", "Username", "First_name", "Last_name", "Title"],
@@ -757,6 +757,7 @@ def init_files(out_dir, schema, do_attendance=False):
         "sections": ["School_id", "Section_id", "Teacher_id", "Teacher_2_id", "Name", "Course_name", "Course_number", "Course_description", "Grade", "Subject", "Term_name", "Term_start", "Term_end", "Period"],
         "enrollments": ["School_id", "Section_id", "Student_id"],
         "attendance": ["Attendance_id", "School_id", "Student_id", "Section_id", "Attendance_date", "Attendance_status", "Attendance_type", "Excuse_code"],
+        "resources": ["Resource_id", "Title", "Roles", "Course_number", "Course_name"],
         "users": ["School_name", "User_type", "User_id", "First_name", "Last_name", "Email", "Username", "Grade", "DOB"],
         "anyschool_sections": ["School_name", "Section_id", "User_id", "Teacher_id", "School_number", "Subject", "Period", "Section_name"]
     }
@@ -772,6 +773,10 @@ def init_files(out_dir, schema, do_attendance=False):
             p = os.path.join(std_dir, "attendance.csv")
             pd.DataFrame(columns=HEADERS["attendance"]).to_csv(p, index=False)
             paths["std_attendance"] = p
+        if do_resources:
+            p = os.path.join(std_dir, "resources.csv")
+            pd.DataFrame(columns=HEADERS["resources"]).to_csv(p, index=False)
+            paths["std_resources"] = p
 
     if schema in ["anyschool", "both"]:
         as_dir = os.path.join(out_dir, "anyschool")
@@ -833,12 +838,14 @@ def transform_to_anyschool(students, teachers, staff, sections, enrollments, sch
 def export_district_state(config, base_dir, dist_name, folder_suffix, db):
     out_dir = os.path.join(base_dir, f"{dist_name}_{folder_suffix}")
     os.makedirs(out_dir, exist_ok=True)
-    file_paths = init_files(out_dir, config["OUTPUT_SCHEMA"], do_attendance=config.get("DO_ATTENDANCE", False))
+    file_paths = init_files(out_dir, config["OUTPUT_SCHEMA"], do_attendance=config.get("DO_ATTENDANCE", False), do_resources=config.get("DO_RESOURCES", False))
     if "std_schools" in file_paths:
         for data, key in [(db["schools"], "std_schools"), (db["teachers"], "std_teachers"), (db["staff"], "std_staff"), (db["students"], "std_students"), (db["sections"], "std_sections"), (db["enrollments"], "std_enrollments")]:
             append_data(data, file_paths[key])
         if config.get("DO_ATTENDANCE", False) and "std_attendance" in file_paths:
             append_data(db["attendance"], file_paths["std_attendance"])
+        if config.get("DO_RESOURCES", False) and "std_resources" in file_paths:
+            append_data(db["resources"], file_paths["std_resources"])
     if "as_users" in file_paths:
         u_chunk, s_chunk = transform_to_anyschool(db["students"], db["teachers"], db["staff"], db["sections"], db["enrollments"], db["schools"])
         append_data(u_chunk, file_paths["as_users"])
@@ -871,7 +878,7 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
         state_abbr = STATE_MAPPINGS[STATE_KEYS[i % len(STATE_KEYS)]][1]
         base_id_seq = (i + 1) * 100000
 
-        dist_db = {"schools": [], "teachers": [], "staff": [], "students": [], "sections": [], "enrollments": [], "attendance": []}
+        dist_db = {"schools": [], "teachers": [], "staff": [], "students": [], "sections": [], "enrollments": [], "attendance": [], "resources": []}
         _seen_student_ids = set()
         _seen_section_ids = set()
 
@@ -1040,6 +1047,44 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
                 if avail:
                     for s in random.sample(avail, k=min(parse_count(config["STUDENTS_PER_SECTION"]), len(avail))):
                         dist_db["enrollments"].append({"School_id": school_id, "Section_id": sec['id'], "Student_id": s['Student_id']})
+
+
+            # --- RESOURCE GENERATION ---
+            # Generate 1-3 synthetic resources per unique course taught in this school.
+            # Resources link to courses via Course_number, matching the Clever content
+            # mapping model (resources → courses → sections).
+            if config.get("DO_RESOURCES", False):
+                seen_courses = {}
+                for sec in dist_db["sections"]:
+                    if sec["School_id"] != school_id: continue
+                    key = sec["Course_number"]
+                    if key not in seen_courses:
+                        seen_courses[key] = (sec["Course_name"], sec["Course_number"])
+                for course_num, (course_name, course_number) in seen_courses.items():
+                    num_resources = random.randint(1, 3)
+                    for r_idx in range(num_resources):
+                        resource_types = [
+                            ("Lesson", "student"),
+                            ("Quiz", "student"),
+                            ("Assessment", "teacher,student"),
+                            ("Assignment", "student"),
+                            ("Teacher Guide", "teacher"),
+                            ("Practice Set", "student"),
+                            ("Unit Overview", "teacher"),
+                            ("Video", "student"),
+                            ("Reading", "student"),
+                            ("Worksheet", "student"),
+                        ]
+                        r_type, r_roles = random.choice(resource_types)
+                        r_title = f"{course_name} - {r_type} {r_idx + 1}"
+                        r_id = f"res-{uuid.uuid4().hex[:8]}"
+                        dist_db["resources"].append({
+                            "Resource_id": r_id,
+                            "Title": r_title,
+                            "Roles": r_roles,
+                            "Course_number": course_number,
+                            "Course_name": course_name,
+                        })
 
             # Sc 35: Teacher with No Student Mapping
             # Done once (first school only): add a real teacher whose sections get zero enrollments.

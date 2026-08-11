@@ -19,8 +19,13 @@ with st.sidebar:
 
     # --- ATTENDANCE ---
     st.markdown("---")
-    st.header("Attendance Data")
+    st.header("Optional Data Files")
     config["DO_ATTENDANCE"] = st.checkbox("Generate Attendance Data", value=DEFAULTS.get("DO_ATTENDANCE", False))
+    config["DO_RESOURCES"] = st.checkbox(
+        "Generate Resources Data",
+        value=DEFAULTS.get("DO_RESOURCES", False),
+        help="Generates a resources.csv file for Clever content mapping. Each course in the district is assigned 1-3 synthetic resources (lessons, quizzes, assessments, etc.) with appropriate role assignments (teacher, student, or both). Resources are linked to courses via Course_number."
+    )
 
     if config["DO_ATTENDANCE"]:
         config["ATT_START_DATE"] = st.date_input("Start Date", value=datetime.date(2025, 9, 1)).strftime("%Y-%m-%d")
