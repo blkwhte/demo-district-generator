@@ -179,6 +179,7 @@ DEFAULTS = {
     "ATT_START_DATE": "2025-09-01",
     "ATT_DAYS": 5,
     "ATT_MODE": "Section",
+    "PROB_CO_TEACHER": 0.15,  # Probability any section gets a co-teacher assigned (Teacher_2_id).
     "EDGE_CASES": []  # List of scenario keys, e.g. ["sc_01", "sc_07"]. Empty = no edge cases.
 }
 
@@ -948,7 +949,13 @@ def run_generation(config, base_output_dir, status_callback=None, progress_callb
                             ec_report("sc_06", f"Section_id: {sec_id}")
 
                         _cname, _cnum, _cdesc = get_course(s_subj, s_grade)
-                        dist_db["sections"].append({"School_id": school_id, "Section_id": sec_id, "Teacher_id": assigned_teacher, "Teacher_2_id": "", "Name": sec_name, "Course_name": _cname, "Course_number": _cnum, "Course_description": _cdesc, "Grade": s_grade, "Subject": s_subj, "Term_name": term["Term_name"], "Term_start": t_start, "Term_end": t_end, "Period": str(period_idx + 1)})
+                        # Co-teacher assignment: pick a different teacher from the same school
+                        co_teacher_id = ""
+                        if config.get("PROB_CO_TEACHER", 0) > 0 and random.random() < config["PROB_CO_TEACHER"]:
+                            co_candidates = [tid for tid in school_teacher_ids if tid != assigned_teacher]
+                            if co_candidates:
+                                co_teacher_id = random.choice(co_candidates)
+                        dist_db["sections"].append({"School_id": school_id, "Section_id": sec_id, "Teacher_id": assigned_teacher, "Teacher_2_id": co_teacher_id, "Name": sec_name, "Course_name": _cname, "Course_number": _cnum, "Course_description": _cdesc, "Grade": s_grade, "Subject": s_subj, "Term_name": term["Term_name"], "Term_start": t_start, "Term_end": t_end, "Period": str(period_idx + 1)})
                         school_section_ids.append({"id": sec_id, "grade": s_grade})
 
             estimated_students = int((len(school_section_ids) * parse_count(config["STUDENTS_PER_SECTION"])) / config["SECTIONS_PER_TEACHER_TERM"])

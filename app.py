@@ -64,6 +64,11 @@ with st.expander("Advanced Settings"):
     config["USERNAME_FMT"] = st.selectbox("Username Format", ["first.last", "f.last", "f_last", "flast"], index=0)
     config["DO_CONTACTS"] = st.checkbox("Contacts", value=DEFAULTS["DO_CONTACTS"])
     config["DO_EXTENSIONS"] = st.checkbox("Extensions", value=DEFAULTS["DO_EXTENSIONS"])
+    config["PROB_CO_TEACHER"] = st.slider(
+        "Co-Teacher Probability",
+        0.0, 1.0, DEFAULTS["PROB_CO_TEACHER"],
+        help="Probability that any given section is assigned a co-teacher (Teacher_2_id). At 15% roughly 1 in 7 sections will have a co-teacher, which reflects realistic district patterns for inclusion and IEP classrooms. Set to 0 to disable entirely."
+    )
 
 # --- EDGE CASES ---
 selected_edge_cases = []
